@@ -195,9 +195,12 @@ export default function App() {
   const updateRedlines = (fn: (r: ContractAnalysisResult["redlines"][number]) => ContractAnalysisResult["redlines"][number]) =>
     analysisResult && setAnalysisResult({ ...analysisResult, redlines: analysisResult.redlines.map(fn) });
 
+  // Logo → landing page. The last result stays reachable via the "Open results" banner.
   const goHome = () => {
     setView("review");
-    if (!isAnalyzing) setShowResults(!!analysisResult && showResults);
+    setShowResults(false);
+    setNotice(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -214,7 +217,7 @@ export default function App() {
           </button>
 
           <nav className="mainNav" aria-label="Main">
-            <button className={view === "review" ? "on" : ""} onClick={goHome}>
+            <button className={view === "review" ? "on" : ""} onClick={() => setView("review")}>
               <FileSearch size={15} /> <span className="lbl">{L("Review", "পর্যালোচনা")}</span>
             </button>
             <button className={view === "playbooks" ? "on" : ""} onClick={() => setView("playbooks")}>
