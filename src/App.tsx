@@ -37,6 +37,8 @@ import { ContractAnalysisResult, Playbook } from "./types";
 import { DEFAULT_PLAYBOOKS } from "./data/playbooks";
 import { SAMPLE_CONTRACTS, SampleContract } from "./data/sampleContracts";
 import { runContractIntelligence, AgentKey, AgentState } from "./services/gemini";
+import { RAG_CONFIG } from "./rag/config";
+import { indexDocument } from "./rag";
 import { Language } from "./i18n/translations";
 import { PlaybookStudio } from "./components/PlaybookStudio";
 import { AnalysisOverview } from "./components/AnalysisOverview";
@@ -103,6 +105,15 @@ export default function App() {
 
   const hasDoc = !!contractText.trim() || !!file;
 
+  // Background indexing for retrieval. Failures are harmless: the analysis falls back to
+  // sending the whole document.
+  const prepareIndex = (f: File, text: string) => {
+    if (!RAG_CONFIG.enabled) return;
+    indexDocument({ file: f, text, name: f.name }).catch((e) =>
+      console.warn("[ContractMind] Could not index the document for retrieval:", e?.message || e)
+    );
+  };
+
   // ── Ingest a file (PDF / DOCX / TXT) ───────────────────────────────────────
   const handleExtractFile = async (f: File) => {
     setBusyExtracting(true);
@@ -122,13 +133,19 @@ export default function App() {
         }
         const hasText = extracted.replace(/\[Page \d+\]/g, "").trim().length > 0;
         setContractText(hasText ? extracted : "[Scanned PDF - Visual Processing Active]");
+        // Index once on upload (convert → chunk → embed → store); analysis and chat reuse it.
+        if (hasText) prepareIndex(f, extracted);
         if (!hasText) {
           setNotice({ kind: "info", text: L("Scanned PDF detected — the AI will read the page images directly.", "স্ক্যান করা PDF — এআই সরাসরি পৃষ্ঠার ছবি পড়বে।") });
         }
       } else if (name.endsWith(".docx")) {
-        setContractText((await mammoth.extractRawText({ arrayBuffer: await f.arrayBuffer() })).value);
+        const docxText = (await mammoth.extractRawText({ arrayBuffer: await f.arrayBuffer() })).value;
+        setContractText(docxText);
+        prepareIndex(f, docxText);
       } else if (f.type.startsWith("text/") || name.endsWith(".txt") || name.endsWith(".md")) {
-        setContractText(await f.text());
+        const plain = await f.text();
+        setContractText(plain);
+        prepareIndex(f, plain);
       } else {
         throw new Error(L("Unsupported file type. Please use PDF, DOCX or TXT.", "এই ফাইল সমর্থিত নয়। PDF, DOCX বা TXT ব্যবহার করুন।"));
       }

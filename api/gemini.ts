@@ -6,8 +6,9 @@
 export const config = { maxDuration: 60 };
 
 const UPSTREAM = "https://generativelanguage.googleapis.com/v1beta/";
-// Only allow the one call the app makes, so this can't be used as an open proxy.
-const ALLOWED_PATH = /^models\/[A-Za-z0-9.\-]+:generateContent$/;
+// Only allow the calls the app makes (generation + batch embeddings for retrieval),
+// so this can't be used as an open proxy.
+const ALLOWED_PATH = /^models\/[A-Za-z0-9.\-]+:(generateContent|batchEmbedContents)$/;
 
 const json = (status: number, message: string) =>
   new Response(JSON.stringify({ error: { code: status, message } }), {

@@ -3,6 +3,11 @@ import { GOLD_STANDARD_CLAUSES } from "../data/goldStandards";
 import { Language } from "../i18n/translations";
 import { SAMPLE_CONTRACTS } from "../data/sampleContracts";
 import { applyScoring, buildScoring } from "../utils/scoring";
+import { RAG_CONFIG } from "../rag/config";
+import { DocIndex, indexDocument, retrieveContext } from "../rag";
+import { AGENT_RULES, ANSWER_RULES, NOT_FOUND } from "../rag/promptBuilder";
+import { needsWholeDocument, summarizeDocument } from "../rag/summarize";
+import { logUsage } from "../rag/tokenLog";
 
 // The API key never reaches the browser: requests go to /api/gemini, and the
 // server-side proxy (vite.config.ts) attaches GEMINI_API_KEY before forwarding.
@@ -214,7 +219,13 @@ type AgentSpec = {
   schema: any;
   context: string; // playbook / gold-standard material this agent needs
   task: string;
+  // What this agent searches the contract for. `scale` multiplies VITE_RAG_TOP_K because
+  // agents that must cover many clauses need more excerpts than a single question does.
+  retrieval: { queries: string[]; scale: number; perQuery: number };
 };
+
+const usageText = (data: any): string =>
+  (data?.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || "").join("");
 
 export type AgentKey = AgentSpec["key"];
 export type AgentState = "running" | "done" | "failed";
@@ -271,6 +282,14 @@ Write all descriptive text in formal, high-quality Bengali (বাংলা). Ke
       key: "risk",
       label: "Risk score & agent perspectives",
       schema: RISK_SCHEMA,
+      retrieval: {
+        queries: [
+          "contract title, parties, effective date, term, governing law, key commercial terms",
+          ...playbook.rules.map((r) => `${r.title}. ${r.targetStandard}`),
+        ],
+        scale: 3,
+        perQuery: 2,
+      },
       context: playbookBlock,
       task: `You are the RISK AUDITOR agent of ContractMind, a multi-agent contract intelligence system.
 Score the contract against the selected playbook:
@@ -290,6 +309,11 @@ Score the contract against the selected playbook:
       key: "redlines",
       label: "Redlines",
       schema: REDLINE_SCHEMA,
+      retrieval: {
+        queries: playbook.rules.map((r) => `${r.title}: ${r.unacceptableTerms.join("; ")}`),
+        scale: 2.5,
+        perQuery: 1,
+      },
       context: `${playbookBlock}\n\n${goldShort}`,
       task: `You are the OPPOSING-COUNSEL & NEGOTIATOR agent of ContractMind.
 Produce 4 to 6 redlines for the highest-risk clauses relative to the playbook. For each:
@@ -303,6 +327,17 @@ Produce 4 to 6 redlines for the highest-risk clauses relative to the playbook. F
       key: "obligations",
       label: "Obligations & payment milestones",
       schema: OBLIGATION_SCHEMA,
+      retrieval: {
+        queries: [
+          "payment terms, fees, invoicing, payment schedule, milestone table",
+          "obligations, deliverables, deadlines, notice and reporting requirements",
+          "termination, renewal, breach consequences, penalties, late fees",
+          "confidentiality, intellectual property, data security and compliance duties",
+          "indemnification, liability, warranties, service levels",
+        ],
+        scale: 3,
+        perQuery: 3,
+      },
       context: "",
       task: `You are the OBLIGATION EXTRACTION agent of ContractMind.
 - obligations: 5 to 10 concrete obligations, ids "OBL-001", ... Include clauseRef, who owes it (obligor) and to whom (beneficiary), the requirement, the trigger or deadline, recurrence, breachConsequence, financialImpact (amount, penalty, or "Not specified"), and status ("Critical" for obligations with severe consequences).
@@ -312,6 +347,11 @@ Produce 4 to 6 redlines for the highest-risk clauses relative to the playbook. F
       key: "benchmarks",
       label: "Gold Standard benchmark comparison",
       schema: BENCHMARK_SCHEMA,
+      retrieval: {
+        queries: GOLD_STANDARD_CLAUSES.map((g) => `${g.category}: ${g.title}`),
+        scale: 2,
+        perQuery: 1,
+      },
       context: goldFull,
       task: `You are the BENCHMARK (RAG) agent of ContractMind.
 Compare the contract against the Gold Standard clause library above. Produce 3 to 5 benchmarkComparisons for the most important clause categories: quote or summarize the contract clause, name the matching gold standard (title + its id), give matchScore 0-100 (100 = fully aligned), list concrete deviations and missing protections (use an empty array when there are none), and a practical recommendation.`,
@@ -323,11 +363,24 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
       truncatedText.trim().length > 80 &&
       !truncatedText.includes("[Scanned PDF - Visual Processing Active]");
 
-    // Encode the document once and share it across all agents.
-    const docPart: any =
-      !hasExtractedText && file && file.size < 14 * 1024 * 1024
-        ? { inline_data: { mime_type: file.type || "application/pdf", data: await toBase64(file) } }
-        : { text: `=== CONTRACT DOCUMENT TEXT ===\n${truncatedText}` };
+    // RAG: index the document once (cached by content hash), then each agent receives only
+    // the excerpts relevant to its task. Any failure falls back to sending the whole document.
+    let index: DocIndex | null = null;
+    if (RAG_CONFIG.enabled && hasExtractedText) {
+      try {
+        index = await indexDocument({ file, text: contractText });
+      } catch (e: any) {
+        console.warn(`[ContractMind] Retrieval unavailable, sending the whole document instead: ${e?.message || e}`);
+      }
+    }
+
+    // Whole-document part, encoded lazily and shared (only built if RAG is off or fails).
+    let fullDocPart: Promise<any> | null = null;
+    const getFullDocPart = () =>
+      (fullDocPart ??= (async () =>
+        !hasExtractedText && file && file.size < 14 * 1024 * 1024
+          ? { inline_data: { mime_type: file.type || "application/pdf", data: await toBase64(file) } }
+          : { text: `=== CONTRACT DOCUMENT TEXT ===\n${truncatedText}` })());
 
     const modelsUsed = new Set<string>();
 
@@ -344,6 +397,23 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
     };
 
     const runAgentInner = async (a: AgentSpec): Promise<any> => {
+      let docPart: any;
+      let mode: "rag" | "full" = "full";
+      let sent: { n: number; total: number } | undefined;
+      if (index) {
+        try {
+          const ctx = await retrieveContext(index, a.retrieval.queries, {
+            topK: Math.round(RAG_CONFIG.topK * a.retrieval.scale),
+            perQuery: a.retrieval.perQuery,
+          });
+          docPart = { text: `${ctx.block}\n\n${AGENT_RULES}` };
+          mode = "rag";
+          sent = { n: ctx.chunks.length, total: ctx.totalChunks };
+        } catch (e: any) {
+          console.warn(`[ContractMind] Retrieval failed for ${a.key}, sending the whole document: ${e?.message || e}`);
+        }
+      }
+      docPart ??= await getFullDocPart();
       const instructions = [a.context, langBlock, `=== YOUR TASK ===\n${a.task}`, style].filter(Boolean).join("\n\n");
       const { res, model } = await callGemini({
         contents: [{ role: "user", parts: [docPart, { text: instructions }] }],
@@ -357,7 +427,8 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
       });
       if (!res.ok) throw new Error(await geminiErrorMessage(res, model));
       const data = await res.json();
-      const rawText: string = (data?.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || "").join("");
+      logUsage(a.key, model, data?.usageMetadata, { mode, chunksSent: sent?.n, chunksTotal: sent?.total });
+      const rawText: string = usageText(data);
       if (!rawText.trim()) throw new Error("Gemini returned an empty response.");
       try {
         const parsed = JSON.parse(rawText.replace(/```json|```/gi, "").trim());
@@ -546,6 +617,57 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
   };
 }
 
+/** Chat answer built from retrieved excerpts, or from a chunk-by-chunk summary for whole-document asks. */
+async function answerFromIndex(
+  index: DocIndex,
+  personaPrompt: string,
+  persona: string,
+  history: { role: "user" | "ai"; text: string }[],
+  question: string,
+  lang: Language
+): Promise<string> {
+  const generate = async (text: string, label: string) => {
+    const { res, model } = await callGemini({
+      contents: [{ role: "user", parts: [{ text }] }],
+      generationConfig: { temperature: 0.2, thinkingConfig: { thinkingLevel: "low" } },
+    });
+    if (!res.ok) throw new Error(await geminiErrorMessage(res, model));
+    const data = await res.json();
+    logUsage(label, model, data?.usageMetadata, { mode: "rag", chunksTotal: index.chunks.length });
+    return usageText(data);
+  };
+
+  if (needsWholeDocument(question)) {
+    const langNote = lang === "bn" ? "Write the answer in clear, professional Bengali (বাংলা)." : "";
+    return summarizeDocument(index.chunks, generate, { instruction: question, languageNote: langNote });
+  }
+
+  // A short follow-up ("and what about the cap?") is searched together with the previous question.
+  const lastUser = [...history].reverse().find((h) => h.role === "user")?.text;
+  const queries = question.length < 60 && lastUser ? [question, lastUser] : [question];
+  const ctx = await retrieveContext(index, queries, { topK: RAG_CONFIG.topK, perQuery: Math.ceil(RAG_CONFIG.topK / queries.length) + 1 });
+
+  const contents = [
+    { role: "user", parts: [{ text: personaPrompt }] },
+    { role: "model", parts: [{ text: `Understood. I am acting as ${persona}. I will answer only from the contract excerpts provided with each question.` }] },
+    ...history.map((h) => ({ role: h.role === "user" ? "user" : "model", parts: [{ text: h.text }] })),
+    { role: "user", parts: [{ text: `${ctx.block}
+
+${ANSWER_RULES}
+
+=== QUESTION ===
+${question}` }] },
+  ];
+  const { res, model } = await callGemini({
+    contents,
+    generationConfig: { temperature: 0.2, thinkingConfig: { thinkingLevel: "low" } },
+  });
+  if (!res.ok) throw new Error(await geminiErrorMessage(res, model));
+  const data = await res.json();
+  logUsage("chat", model, data?.usageMetadata, { mode: "rag", chunksSent: ctx.chunks.length, chunksTotal: ctx.totalChunks });
+  return usageText(data) || NOT_FOUND;
+}
+
 export async function askContractChat(
   contractText: string,
   persona: "In-House Counsel" | "Opposing Counsel" | "Commercial Dealmaker",
@@ -567,6 +689,18 @@ export async function askContractChat(
 Base your answer exclusively on the provided contract text. CITE specific section numbers and clause quotes when available. Keep your response punchy, professional, and actionable.${langInstruction}`;
 
   try {
+    // RAG path: retrieve only the passages relevant to this question (or, for whole-document
+    // requests, summarise chunk by chunk). Falls through to the full-document path on failure.
+    if (RAG_CONFIG.enabled && contractText.trim().length > 80 && !contractText.includes("[Scanned PDF")) {
+      try {
+        const index = await indexDocument({ file, text: contractText });
+        const ragReply = await answerFromIndex(index, prompt, persona, history, question, lang);
+        if (ragReply) return ragReply;
+      } catch (e: any) {
+        console.warn(`[ContractMind] Retrieval unavailable for chat, sending the whole document: ${e?.message || e}`);
+      }
+    }
+
     const docPart = file
       ? { inline_data: { mime_type: file.type || "application/pdf", data: await toBase64(file) } }
       : { text: `=== CONTRACT TEXT ===\n${contractText.slice(0, MAX_CHARS)}` };
@@ -591,7 +725,8 @@ Base your answer exclusively on the provided contract text. CITE specific sectio
     }
 
     const data = await response.json();
-    return (data?.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || "").join("") || "No response received.";
+    logUsage("chat", model, data?.usageMetadata, { mode: "full" });
+    return usageText(data) || "No response received.";
   } catch (err: any) {
     return `I encountered an issue analyzing this question: ${err.message}. Please try again.`;
   }
