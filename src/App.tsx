@@ -9,8 +9,10 @@ import {
   FileEdit,
   FileSearch,
   FileText,
+  Gavel,
   GitCompare,
   Info,
+  Landmark,
   LayoutDashboard,
   ListOrdered,
   Lock,
@@ -52,10 +54,12 @@ import { PlaybookScorecard } from "./components/PlaybookScorecard";
 import { applyScoring, rescore } from "./utils/scoring";
 import { ContractView } from "./components/ContractView";
 import { buildFindings, findingId } from "./utils/findings";
+import LandGuide from "./components/legal/LandGuide";
+import CaseHelper from "./components/legal/CaseHelper";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-type View = "review" | "playbooks" | "library";
+type View = "review" | "playbooks" | "library" | "land" | "case";
 type ResultTab = "Analysis" | "Contract" | "Redlines" | "Obligations" | "Gold Standard" | "AI Counsel Chat";
 type Notice = { text: string; kind: "info" | "ok" | "warn" | "error" } | null;
 type Progress = Record<AgentKey, AgentState | "waiting">;
@@ -242,6 +246,12 @@ export default function App() {
             </button>
             <button className={view === "library" ? "on" : ""} onClick={() => setView("library")}>
               <Database size={15} /> <span className="lbl">{L("Library", "লাইব্রেরি")}</span>
+            </button>
+            <button className={view === "land" ? "on" : ""} onClick={() => setView("land")}>
+              <Landmark size={15} /> <span className="lbl">{L("Land Guide", "জমি গাইড")}</span>
+            </button>
+            <button className={view === "case" ? "on" : ""} onClick={() => setView("case")}>
+              <Gavel size={15} /> <span className="lbl">{L("Case Helper", "আইনি সহায়তা")}</span>
             </button>
           </nav>
 
@@ -466,6 +476,38 @@ export default function App() {
                 setNotice({ kind: "ok", text: L(`Loaded "${title}". Choose a playbook and click Analyze.`, `"${title}" লোড হয়েছে। প্লেবুক বেছে বিশ্লেষণ করুন।`) });
               }}
             />
+          </>
+        )}
+
+        {/* ───────────── LAND GUIDE ───────────── */}
+        {view === "land" && (
+          <>
+            <PageIntro
+              title={L("Land Guide", "জমি গাইড")}
+              desc={L(
+                "Get inherited land recorded in the heirs' names without a broker: steps, offices, a share calculator and a khatian reader. Content is in Bangla.",
+                "ওয়ারিশ সূত্রে পাওয়া জমি দালাল ছাড়া নিজেদের নামে নেওয়ার ধাপ, কাগজ, অফিস, ভাগের হিসাব আর খতিয়ান পড়া।"
+              )}
+            />
+            <ErrorBoundary>
+              <LandGuide />
+            </ErrorBoundary>
+          </>
+        )}
+
+        {/* ───────────── CASE HELPER ───────────── */}
+        {view === "case" && (
+          <>
+            <PageIntro
+              title={L("Case Helper", "আইনি সহায়তা")}
+              desc={L(
+                "Understand a legal paper or problem: options, a sensible next step and questions for a lawyer. Content is in Bangla.",
+                "যেকোনো আইনি কাগজ বা সমস্যা বুঝে নিন: বিকল্প, করণীয় আর আইনজীবীর জন্য প্রশ্ন।"
+              )}
+            />
+            <ErrorBoundary>
+              <CaseHelper />
+            </ErrorBoundary>
           </>
         )}
       </main>

@@ -41,7 +41,7 @@ const isSampleContract = (text: string) =>
  * Response (ok or not) and the model that produced it; throws only when every
  * attempt timed out or the network failed.
  */
-async function callGemini(body: any): Promise<{ res: Response; model: string }> {
+export async function callGemini(body: any): Promise<{ res: Response; model: string }> {
   let last: { res: Response; model: string } | null = null;
   let lastError = "";
   for (const { model, timeoutMs, delayMs } of ATTEMPTS) {
@@ -85,7 +85,7 @@ async function callGemini(body: any): Promise<{ res: Response; model: string }> 
   throw new Error(`The AI service is not responding right now (${lastError}). Please try again in a minute.`);
 }
 
-async function geminiErrorMessage(res: Response, model: string): Promise<string> {
+export async function geminiErrorMessage(res: Response, model: string): Promise<string> {
   let detail = "";
   try {
     detail = (await res.json())?.error?.message || "";
@@ -102,7 +102,7 @@ async function geminiErrorMessage(res: Response, model: string): Promise<string>
   return `Gemini request failed (${res.status}). ${detail}`.trim();
 }
 
-async function toBase64(f: File): Promise<string> {
+export async function toBase64(f: File): Promise<string> {
   const buf = new Uint8Array(await f.arrayBuffer());
   let bin = "";
   for (let i = 0; i < buf.length; i += 0x8000) {

@@ -23,6 +23,17 @@ pnpm build
 
 On Vercel, set `GEMINI_API_KEY` in the project's environment variables (the `/api/gemini` function attaches it).
 
+## Land Guide and Case Helper
+
+Two extra tabs for people in Bangladesh. Their content is in Bangla; the tab names follow the EN/বাংলা toggle.
+
+- **Land Guide (জমি গাইড)**: steps for inheritance mutation (namjari) without a broker, how to find a khatian on the government portals, a khatian reader (upload a photo or PDF and Gemini explains owners, shares and plots), an inheritance share calculator (Muslim faraid, Hindu Dayabhaga, Christian Succession Act 1925, common family cases only), an heir-details organiser with a copy button, and a Q&A chat.
+- **Case Helper (আইনি সহায়তা)**: first steps after receiving a summons or notice, free legal aid information, an explainer for a legal paper or a typed problem (options, a sensible next step, questions for a lawyer), and a Q&A chat.
+
+Code: `src/components/legal/` (pages), `src/services/legalAssist.ts` (prompts and Gemini calls through the same `/api/gemini` proxy), `src/legal/faraid.ts` (share calculator, tested in `faraid.test.ts`). Styles are scoped under `.legalPage` in `src/style.css`.
+
+Uploads on these pages are limited to 3 MB, because Vercel functions reject request bodies over 4.5 MB and files are sent base64-encoded. Everything shown is general information, not legal advice; the calculator refuses cases it does not cover and says to ask a lawyer.
+
 ## Chunking + retrieval (RAG) pipeline
 
 Instead of sending the whole contract to Gemini for every task, the app indexes each document once and sends only the relevant passages.
