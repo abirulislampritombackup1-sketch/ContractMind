@@ -234,7 +234,7 @@ export const CounselChat: React.FC<CounselChatProps> = ({ contractText, file, la
         {loading && (
           <div className="flex items-center gap-2 p-3 text-xs text-brand font-medium">
             <span className="spinner" />
-            <span>{t.consulting} {activePersona}...</span>
+            <span>{t.consulting} {activePersona === "Opposing Counsel" ? t.personaOpposing : activePersona === "Commercial Dealmaker" ? t.personaDealmaker : t.personaInHouse}...</span>
           </div>
         )}
       </div>

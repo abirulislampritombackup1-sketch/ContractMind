@@ -16,6 +16,7 @@ import {
   Sparkles,
   Table,
 } from "lucide-react";
+import { useLang } from "../i18n/lang";
 
 interface ObligationsViewProps {
   obligations: Obligation[];
@@ -32,6 +33,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
   locatedIds,
   onShowInContract,
 }) => {
+  const { L, term } = useLang();
   const [viewMode, setViewMode] = useState<"matrix" | "milestones" | "json">("matrix");
   const [filterObligor, setFilterObligor] = useState<string>("All");
   const [filterCategory, setFilterCategory] = useState<string>("All");
@@ -72,11 +74,11 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-6 rounded-2xl border border-line">
         <div>
           <div className="flex items-center gap-2 text-brand text-xs font-bold tracking-wider uppercase mb-1">
-            <ListOrdered size={15} /> Automated Obligation & Milestone Extraction
+            <ListOrdered size={15} /> {L("Automated Obligation & Milestone Extraction", "বাধ্যবাধকতা ও মাইলস্টোন")}
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">Contractual Obligations & Schedule</h2>
+          <h2 className="text-xl font-bold text-white tracking-tight">{L("Contractual Obligations & Schedule", "চুক্তির দায়িত্ব ও সময়সূচি")}</h2>
           <p className="text-muted text-sm mt-1">
-            Transform unstructured legal language and complex financial tables into a machine-readable structured JSON format.
+            {L("Transform unstructured legal language and complex financial tables into a machine-readable structured JSON format.", "চুক্তির জটিল ভাষা ও আর্থিক টেবিল থেকে দায়িত্বগুলো গুছিয়ে তালিকা ও JSON আকারে দেখানো হয়।")}
           </p>
         </div>
 
@@ -87,24 +89,24 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
               className={viewMode === "matrix" ? "on" : ""}
               onClick={() => setViewMode("matrix")}
             >
-              <Table size={14} className="inline mr-1.5" /> Obligations ({obligations.length})
+              <Table size={14} className="inline mr-1.5" /> {L("Obligations", "বাধ্যবাধকতা")} ({obligations.length})
             </button>
             <button
               className={viewMode === "milestones" ? "on" : ""}
               onClick={() => setViewMode("milestones")}
             >
-              <Calendar size={14} className="inline mr-1.5" /> Milestones ({paymentMilestones.length})
+              <Calendar size={14} className="inline mr-1.5" /> {L("Milestones", "মাইলস্টোন")} ({paymentMilestones.length})
             </button>
             <button
               className={viewMode === "json" ? "on" : ""}
               onClick={() => setViewMode("json")}
             >
-              <Code size={14} className="inline mr-1.5" /> Structured JSON
+              <Code size={14} className="inline mr-1.5" /> {L("Structured JSON", "JSON ডেটা")}
             </button>
           </div>
 
           <button onClick={handleDownloadJson} className="secondary text-xs">
-            <Download size={14} /> Export JSON
+            <Download size={14} /> {L("Export JSON", "JSON এক্সপোর্ট")}
           </button>
         </div>
       </div>
@@ -113,7 +115,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3.5 rounded-xl bg-surface border border-line">
           <div className="text-xs text-muted font-medium mb-1 flex items-center justify-between">
-            <span>Total Obligations</span>
+            <span>{L("Total Obligations", "মোট বাধ্যবাধকতা")}</span>
             <Layers size={14} className="text-brand" />
           </div>
           <div className="text-xl font-extrabold text-white">{obligations.length}</div>
@@ -121,7 +123,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
 
         <div className="p-3.5 rounded-xl bg-surface border border-line">
           <div className="text-xs text-muted font-medium mb-1 flex items-center justify-between">
-            <span>Vendor Duties</span>
+            <span>{L("Vendor Duties", "ভেন্ডরের দায়িত্ব")}</span>
             <CheckCircle2 size={14} className="text-brand-2" />
           </div>
           <div className="text-xl font-extrabold text-brand-2">
@@ -131,7 +133,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
 
         <div className="p-3.5 rounded-xl bg-surface border border-line">
           <div className="text-xs text-muted font-medium mb-1 flex items-center justify-between">
-            <span>Customer Duties</span>
+            <span>{L("Customer Duties", "গ্রাহকের দায়িত্ব")}</span>
             <Clock size={14} className="text-warn" />
           </div>
           <div className="text-xl font-extrabold text-warn">
@@ -141,7 +143,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
 
         <div className="p-3.5 rounded-xl bg-surface border border-line">
           <div className="text-xs text-muted font-medium mb-1 flex items-center justify-between">
-            <span>Payment Milestones</span>
+            <span>{L("Payment Milestones", "পেমেন্ট মাইলস্টোন")}</span>
             <DollarSign size={14} className="text-brand" />
           </div>
           <div className="text-xl font-extrabold text-brand">{paymentMilestones.length}</div>
@@ -154,7 +156,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
           {/* Filters Bar */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-surface-solid border border-line">
             <div className="flex items-center gap-2 text-xs text-muted font-medium">
-              <Filter size={14} className="text-brand" /> Filter by:
+              <Filter size={14} className="text-brand" /> {L("Filter by:", "ফিল্টার:")}
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
@@ -163,10 +165,10 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                 onChange={(e) => setFilterObligor(e.target.value)}
                 className="bg-surface border border-line rounded-lg px-2.5 py-1 text-xs text-white"
               >
-                <option value="All">All Obligors</option>
-                <option value="Vendor">Vendor Only</option>
-                <option value="Customer">Customer Only</option>
-                <option value="Mutual">Mutual</option>
+                <option value="All">{L("All Obligors", "সব পক্ষ")}</option>
+                <option value="Vendor">{L("Vendor Only", "শুধু ভেন্ডর")}</option>
+                <option value="Customer">{L("Customer Only", "শুধু গ্রাহক")}</option>
+                <option value="Mutual">{L("Mutual", "উভয় পক্ষ")}</option>
               </select>
 
               <select
@@ -174,12 +176,12 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                 onChange={(e) => setFilterCategory(e.target.value)}
                 className="bg-surface border border-line rounded-lg px-2.5 py-1 text-xs text-white"
               >
-                <option value="All">All Categories</option>
-                <option value="Delivery & Milestones">Delivery & Milestones</option>
-                <option value="Payment & Financial">Payment & Financial</option>
-                <option value="Reporting & Notice">Reporting & Notice</option>
-                <option value="Compliance & Security">Compliance & Security</option>
-                <option value="Termination & Transition">Termination & Transition</option>
+                <option value="All">{L("All Categories", "সব বিভাগ")}</option>
+                <option value="Delivery & Milestones">{term("Delivery & Milestones")}</option>
+                <option value="Payment & Financial">{term("Payment & Financial")}</option>
+                <option value="Reporting & Notice">{term("Reporting & Notice")}</option>
+                <option value="Compliance & Security">{term("Compliance & Security")}</option>
+                <option value="Termination & Transition">{term("Termination & Transition")}</option>
               </select>
             </div>
           </div>
@@ -199,8 +201,8 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                     </span>
                     <span className="text-xs text-faint">{o.clauseRef}</span>
                     {onShowInContract && locatedIds?.has(`obl:${o.id}`) && (
-                      <button className="locBtn" onClick={() => onShowInContract(o.id)} title="Highlight this clause in the original contract">
-                        Show in contract
+                      <button className="locBtn" onClick={() => onShowInContract(o.id)} title={L("Highlight this clause in the original contract", "মূল চুক্তিতে এই ধারাটি দেখান")}>
+                        {L("Show in contract", "চুক্তিতে দেখুন")}
                       </button>
                     )}
                   </div>
@@ -213,7 +215,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                         : "bg-line text-muted"
                     }`}
                   >
-                    {o.status}
+                    {term(o.status)}
                   </span>
                 </div>
 
@@ -221,7 +223,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                 <div>
                   <h4 className="font-semibold text-white text-sm leading-snug">{o.requirement}</h4>
                   <div className="flex items-center gap-2 mt-2 text-xs">
-                    <span className="font-bold text-white/80">Obligor:</span>
+                    <span className="font-bold text-white/80">{L("Obligor:", "দায়িত্বপ্রাপ্ত:")}</span>
                     <span
                       className={`px-2 py-0.5 rounded-full font-bold text-[11px] ${
                         o.obligor === "Customer"
@@ -231,34 +233,34 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                           : "bg-white/10 text-white"
                       }`}
                     >
-                      {o.obligor}
+                      {term(o.obligor)}
                     </span>
                     <span className="text-faint">→</span>
-                    <span className="text-muted">Beneficiary: {o.beneficiary}</span>
+                    <span className="text-muted">{L("Beneficiary:", "সুবিধাভোগী:")} {term(o.beneficiary)}</span>
                   </div>
                 </div>
 
                 {/* Details Grid */}
                 <div className="pt-2 border-t border-line/60 grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span className="text-[11px] text-faint block">Deadline / Trigger:</span>
+                    <span className="text-[11px] text-faint block">{L("Deadline / Trigger:", "সময়সীমা / কখন:")}</span>
                     <span className="text-white font-medium">{o.triggerOrDeadline}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] text-faint block">Recurrence:</span>
-                    <span className="text-muted">{o.recurrence}</span>
+                    <span className="text-[11px] text-faint block">{L("Recurrence:", "পুনরাবৃত্তি:")}</span>
+                    <span className="text-muted">{term(o.recurrence)}</span>
                   </div>
                 </div>
 
                 {/* Breach Consequence & Financial Impact */}
                 <div className="p-2.5 rounded-lg bg-surface-solid/80 border border-line text-xs space-y-1">
                   <div className="text-[11px] text-danger font-semibold flex items-center gap-1">
-                    <ShieldAlert size={12} /> Breach Consequence:
+                    <ShieldAlert size={12} /> {L("Breach Consequence:", "লঙ্ঘনের পরিণতি:")}
                   </div>
                   <div className="text-muted text-[11px]">{o.breachConsequence}</div>
                   {o.financialImpact && (
                     <div className="text-brand text-[11px] font-medium pt-1">
-                      Financial Impact: {o.financialImpact}
+                      {L("Financial Impact:", "আর্থিক প্রভাব:")} {o.financialImpact}
                     </div>
                   )}
                 </div>
@@ -273,13 +275,13 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
         <div className="bg-surface p-6 rounded-2xl border border-line space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-line">
             <div>
-              <h3 className="font-bold text-white text-base">Payment & Deliverable Milestone Schedule</h3>
+              <h3 className="font-bold text-white text-base">{L("Payment & Deliverable Milestone Schedule", "পেমেন্ট ও ডেলিভারির সময়সূচি")}</h3>
               <p className="text-xs text-muted mt-0.5">
-                Automatically extracted from contract payment schedules and hierarchical milestone tables.
+                {L("Automatically extracted from contract payment schedules and hierarchical milestone tables.", "চুক্তির পেমেন্ট সূচি ও মাইলস্টোন টেবিল থেকে স্বয়ংক্রিয়ভাবে নেওয়া।")}
               </p>
             </div>
             <div className="text-xs px-3 py-1 rounded-full bg-brand/15 text-brand font-bold">
-              Vision-Enhanced Table Parser
+              {L("Vision-Enhanced Table Parser", "টেবিল থেকে পড়া")}
             </div>
           </div>
 
@@ -287,12 +289,12 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-line text-faint font-semibold uppercase tracking-wider text-[11px]">
-                  <th className="pb-3 pl-2">Milestone ID</th>
-                  <th className="pb-3">Phase / Deliverable</th>
-                  <th className="pb-3">Target Date / Trigger</th>
-                  <th className="pb-3">Milestone Payment</th>
-                  <th className="pb-3">Responsible</th>
-                  <th className="pb-3 pr-2">Status</th>
+                  <th className="pb-3 pl-2">{L("Milestone ID", "মাইলস্টোন আইডি")}</th>
+                  <th className="pb-3">{L("Phase / Deliverable", "ধাপ / ডেলিভারি")}</th>
+                  <th className="pb-3">{L("Target Date / Trigger", "লক্ষ্য তারিখ / কখন")}</th>
+                  <th className="pb-3">{L("Milestone Payment", "পেমেন্ট")}</th>
+                  <th className="pb-3">{L("Responsible", "দায়িত্বপ্রাপ্ত")}</th>
+                  <th className="pb-3 pr-2">{L("Status", "অবস্থা")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/40">
@@ -307,7 +309,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                     <td className="py-3.5 font-bold text-brand text-sm">{m.amount}</td>
                     <td className="py-3.5">
                       <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-surface-solid border border-line text-muted">
-                        {m.responsibleParty}
+                        {term(m.responsibleParty)}
                       </span>
                     </td>
                     <td className="py-3.5 pr-2">
@@ -320,7 +322,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                             : "bg-line text-muted"
                         }`}
                       >
-                        {m.status}
+                        {term(m.status)}
                       </span>
                     </td>
                   </tr>
@@ -337,14 +339,14 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-line">
             <div className="flex items-center gap-2">
               <Code size={18} className="text-brand" />
-              <h3 className="font-bold text-white text-base">Validated Structured Output Schema</h3>
+              <h3 className="font-bold text-white text-base">{L("Validated Structured Output Schema", "যাচাইকৃত JSON ডেটা")}</h3>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={handleCopyJson} className="secondary text-xs">
-                <Copy size={13} /> {copied ? "Copied!" : "Copy JSON"}
+                <Copy size={13} /> {copied ? L("Copied!", "কপি হয়েছে!") : L("Copy JSON", "JSON কপি")}
               </button>
               <button onClick={handleDownloadJson} className="primary text-xs">
-                <Download size={13} /> Download .json
+                <Download size={13} /> {L("Download .json", ".json ডাউনলোড")}
               </button>
             </div>
           </div>

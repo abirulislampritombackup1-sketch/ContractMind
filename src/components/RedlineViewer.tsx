@@ -20,6 +20,7 @@ import {
   MapPin,
   SearchX,
 } from "lucide-react";
+import { useLang } from "../i18n/lang";
 
 interface RedlineViewerProps {
   originalText: string;
@@ -44,6 +45,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
   locatedIds,
   onShowInContract,
 }) => {
+  const { L, term } = useLang();
   const [docxState, setDocxState] = useState<{ busy: boolean; msg: string; err?: boolean }>({ busy: false, msg: "" });
 
   const handleDownloadDocx = async () => {
@@ -61,10 +63,13 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setDocxState({
         busy: false,
-        msg: `Word redline downloaded: ${placed} change${placed === 1 ? "" : "s"} tracked in place` + (unplaced ? `, ${unplaced} in the appendix (wording not found verbatim).` : "."),
+        msg: L(
+          `Word redline downloaded: ${placed} change${placed === 1 ? "" : "s"} tracked in place` + (unplaced ? `, ${unplaced} in the appendix (wording not found verbatim).` : "."),
+          `Word রেডলাইন ডাউনলোড হয়েছে: ${placed}টি পরিবর্তন জায়গামতো চিহ্নিত` + (unplaced ? `, ${unplaced}টি পরিশিষ্টে (হুবহু শব্দ পাওয়া যায়নি)।` : "।")
+        ),
       });
     } catch (e: any) {
-      setDocxState({ busy: false, msg: `Could not create the Word file: ${e?.message || e}`, err: true });
+      setDocxState({ busy: false, msg: L(`Could not create the Word file: ${e?.message || e}`, `Word ফাইল তৈরি করা যায়নি: ${e?.message || e}`), err: true });
     }
   };
   const [viewMode, setViewMode] = useState<"redline" | "clean">("redline");
@@ -93,11 +98,11 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-6 rounded-2xl border border-line">
         <div>
           <div className="flex items-center gap-2 text-brand text-xs font-bold tracking-wider uppercase mb-1">
-            <FileEdit size={15} /> Automated Redline & Negotiation Studio
+            <FileEdit size={15} /> {L("Automated Redline & Negotiation Studio", "স্বয়ংক্রিয় রেডলাইন ও আলোচনা")}
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">AI-Powered Clause Redlining</h2>
+          <h2 className="text-xl font-bold text-white tracking-tight">{L("AI-Powered Clause Redlining", "এআই দিয়ে ধারা সংশোধন")}</h2>
           <p className="text-muted text-sm mt-1">
-            Every suggested modification includes chain-of-thought reasoning, adverse counsel stances, and commercial compromise language.
+            {L("Every suggested modification includes chain-of-thought reasoning, adverse counsel stances, and commercial compromise language.", "প্রতিটি প্রস্তাবিত সংশোধনের সাথে যুক্তি, প্রতিপক্ষের অবস্থান এবং আপসের ভাষা দেওয়া আছে।")}
           </p>
         </div>
 
@@ -108,24 +113,24 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
               className={viewMode === "redline" ? "on" : ""}
               onClick={() => setViewMode("redline")}
             >
-              <FileEdit size={14} className="inline mr-1.5" /> Redline Diff View
+              <FileEdit size={14} className="inline mr-1.5" /> {L("Redline Diff View", "পরিবর্তন দেখুন")}
             </button>
             <button
               className={viewMode === "clean" ? "on" : ""}
               onClick={() => setViewMode("clean")}
             >
-              <FileCheck size={14} className="inline mr-1.5" /> Clean Executable Version
+              <FileCheck size={14} className="inline mr-1.5" /> {L("Clean Executable Version", "চূড়ান্ত পরিষ্কার সংস্করণ")}
             </button>
           </div>
 
-          <button onClick={handleDownloadDocx} className="primary text-xs" disabled={docxState.busy || redlines.every((r) => r.accepted === false)} title="Word file with tracked changes and rationale comments">
-            {docxState.busy ? <span className="spinner" /> : <FileDown size={14} />} Download Word redline
+          <button onClick={handleDownloadDocx} className="primary text-xs" disabled={docxState.busy || redlines.every((r) => r.accepted === false)} title={L("Word file with tracked changes and rationale comments", "চিহ্নিত পরিবর্তন ও ব্যাখ্যাসহ Word ফাইল")}>
+            {docxState.busy ? <span className="spinner" /> : <FileDown size={14} />} {L("Download Word redline", "Word রেডলাইন ডাউনলোড")}
           </button>
           <button
             onClick={() => downloadTextFile(cleanDoc, "ContractMind_Reconciled_Clean.txt")}
             className="secondary text-xs"
           >
-            <Download size={14} /> Clean text (.txt)
+            <Download size={14} /> {L("Clean text (.txt)", "পরিষ্কার টেক্সট (.txt)")}
           </button>
         </div>
       </div>
@@ -134,26 +139,26 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
         <div className={`notice ${docxState.err ? "error" : "ok"}`}>
           {docxState.err ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
           <span>{docxState.msg}</span>
-          <button onClick={() => setDocxState({ busy: false, msg: "" })} aria-label="Dismiss"><X size={16} /></button>
+          <button onClick={() => setDocxState({ busy: false, msg: "" })} aria-label={L("Dismiss", "বন্ধ করুন")}><X size={16} /></button>
         </div>
       )}
 
       {/* Tally & Batch Controls */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3.5 rounded-xl bg-surface border border-line flex items-center justify-between">
-          <span className="text-xs text-muted font-medium">Total Redlines</span>
+          <span className="text-xs text-muted font-medium">{L("Total Redlines", "মোট রেডলাইন")}</span>
           <span className="font-bold text-white text-base">{redlines.length}</span>
         </div>
         <div className="p-3.5 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-between">
-          <span className="text-xs text-brand font-medium">Accepted</span>
+          <span className="text-xs text-brand font-medium">{L("Accepted", "গৃহীত")}</span>
           <span className="font-bold text-brand text-base">{acceptedCount}</span>
         </div>
         <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/20 flex items-center justify-between">
-          <span className="text-xs text-danger font-medium">Rejected</span>
+          <span className="text-xs text-danger font-medium">{L("Rejected", "প্রত্যাখ্যাত")}</span>
           <span className="font-bold text-danger text-base">{rejectedCount}</span>
         </div>
         <div className="p-3.5 rounded-xl bg-warn/10 border border-warn/20 flex items-center justify-between">
-          <span className="text-xs text-warn font-medium">Pending Review</span>
+          <span className="text-xs text-warn font-medium">{L("Pending Review", "পর্যালোচনা বাকি")}</span>
           <span className="font-bold text-warn text-base">{pendingCount}</span>
         </div>
       </div>
@@ -161,14 +166,14 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
       {/* Batch Accept / Reject Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-surface-solid border border-line">
         <div className="text-xs text-muted">
-          Review individual clauses below or apply batch decisions across all suggested redlines:
+          {L("Review individual clauses below or apply batch decisions across all suggested redlines:", "নিচে প্রতিটি ধারা আলাদাভাবে দেখুন, অথবা সব রেডলাইনে একসাথে সিদ্ধান্ত নিন:")}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={onAcceptAll} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand/20 text-brand border border-brand/30 hover:bg-brand/30 transition-all flex items-center gap-1">
-            <Check size={13} /> Accept All
+            <Check size={13} /> {L("Accept All", "সব গ্রহণ")}
           </button>
           <button onClick={onRejectAll} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-danger/20 text-danger border border-danger/30 hover:bg-danger/30 transition-all flex items-center gap-1">
-            <X size={13} /> Reject All
+            <X size={13} /> {L("Reject All", "সব প্রত্যাখ্যান")}
           </button>
         </div>
       </div>
@@ -179,19 +184,19 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-line">
             <div className="flex items-center gap-2">
               <CheckCircle2 size={18} className="text-brand" />
-              <h3 className="font-bold text-white text-base">Reconciled Contract Preview</h3>
+              <h3 className="font-bold text-white text-base">{L("Reconciled Contract Preview", "সংশোধিত চুক্তির প্রিভিউ")}</h3>
               <span className="text-xs px-2 py-0.5 rounded bg-brand/15 text-brand font-medium">
-                {acceptedCount} modifications incorporated
+                {acceptedCount} {L("modifications incorporated", "টি সংশোধন যুক্ত")}
               </span>
             </div>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(cleanDoc);
-                alert("Clean contract copied to clipboard!");
+                alert(L("Clean contract copied to clipboard!", "পরিষ্কার চুক্তি কপি হয়েছে!"));
               }}
               className="text-xs text-brand hover:underline flex items-center gap-1"
             >
-              <Copy size={13} /> Copy All
+              <Copy size={13} /> {L("Copy All", "সব কপি")}
             </button>
           </div>
           <pre className="preview max-h-[600px] overflow-y-auto leading-relaxed text-xs">
@@ -230,16 +235,16 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                           : "bg-brand/20 text-brand border border-brand/30"
                       }`}
                     >
-                      {r.severity} Severity
+                      {L(`${r.severity} Severity`, `${term(r.severity)} গুরুত্ব`)}
                     </span>
                     {locatedIds && onShowInContract && (
                       locatedIds.has(`red:${r.id}`) ? (
-                        <button className="locBtn" onClick={() => onShowInContract(r.id)} title="Highlight this clause in the original contract">
-                          <MapPin size={12} /> Show in contract
+                        <button className="locBtn" onClick={() => onShowInContract(r.id)} title={L("Highlight this clause in the original contract", "মূল চুক্তিতে এই ধারাটি দেখান")}>
+                          <MapPin size={12} /> {L("Show in contract", "চুক্তিতে দেখুন")}
                         </button>
                       ) : (
-                        <span className="locBtn missing" title="The quoted wording could not be found in the contract text">
-                          <SearchX size={12} /> Not found in text
+                        <span className="locBtn missing" title={L("The quoted wording could not be found in the contract text", "উদ্ধৃত শব্দগুলো চুক্তির টেক্সটে পাওয়া যায়নি")}>
+                          <SearchX size={12} /> {L("Not found in text", "টেক্সটে পাওয়া যায়নি")}
                         </span>
                       )
                     )}
@@ -255,7 +260,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                           : "bg-surface-solid text-muted hover:text-white border border-line"
                       }`}
                     >
-                      <Check size={13} /> Accept
+                      <Check size={13} /> {L("Accept", "গ্রহণ")}
                     </button>
                     <button
                       onClick={() => onUpdateRedline(r.id, false)}
@@ -265,13 +270,13 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                           : "bg-surface-solid text-muted hover:text-white border border-line"
                       }`}
                     >
-                      <X size={13} /> Reject
+                      <X size={13} /> {L("Reject", "প্রত্যাখ্যান")}
                     </button>
                     {r.accepted !== null && (
                       <button
                         onClick={() => onUpdateRedline(r.id, null)}
                         className="p-1.5 rounded-lg text-faint hover:text-white bg-surface-solid border border-line"
-                        title="Reset decision"
+                        title={L("Reset decision", "সিদ্ধান্ত মুছুন")}
                       >
                         <RotateCcw size={13} />
                       </button>
@@ -284,7 +289,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                   {/* Original Text (Deletion) */}
                   <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/20 space-y-1.5">
                     <div className="flex items-center justify-between text-[11px] font-bold text-danger uppercase tracking-wider">
-                      <span>Original Clause (To Delete)</span>
+                      <span>{L("Original Clause (To Delete)", "মূল ধারা (বাদ যাবে)")}</span>
                       <span className="font-mono text-[10px]">[-]</span>
                     </div>
                     <div className="clauseText del">
@@ -295,12 +300,12 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                   {/* Proposed Text (Insertion) */}
                   <div className="p-3.5 rounded-xl insBox space-y-1.5 relative">
                     <div className="flex items-center justify-between text-[11px] font-bold insLabel uppercase tracking-wider">
-                      <span>ContractMind Redline (To Insert)</span>
+                      <span>{L("ContractMind Redline (To Insert)", "প্রস্তাবিত ধারা (যোগ হবে)")}</span>
                       <button
                         onClick={() => handleCopyProposed(r.id, r.proposedText)}
                         className="text-[10px] text-brand hover:underline flex items-center gap-1 normal-case"
                       >
-                        <Copy size={11} /> {copiedId === r.id ? "Copied!" : "Copy"}
+                        <Copy size={11} /> {copiedId === r.id ? L("Copied!", "কপি হয়েছে!") : L("Copy", "কপি")}
                       </button>
                     </div>
                     <div className="clauseText ins">
@@ -317,7 +322,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                   >
                     <Sparkles size={14} />
                     <span>
-                      {isExpanded ? "Hide Chain-of-Thought Rationale" : "Inspect Legal Chain-of-Thought & Negotiation Script"}
+                      {isExpanded ? L("Hide Chain-of-Thought Rationale", "যুক্তি লুকান") : L("Inspect Legal Chain-of-Thought & Negotiation Script", "আইনি যুক্তি ও আলোচনার কথা দেখুন")}
                     </span>
                     {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
@@ -327,7 +332,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                       {/* Opposing Counsel Stance */}
                       <div>
                         <div className="text-[11px] font-bold text-danger uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                          <ShieldAlert size={13} /> Opposing Counsel's Aggressive Stance
+                          <ShieldAlert size={13} /> {L("Opposing Counsel's Aggressive Stance", "প্রতিপক্ষ আইনজীবীর কঠোর অবস্থান")}
                         </div>
                         <p className="text-xs text-muted leading-relaxed pl-4 border-l-2 border-danger/40">
                           {r.chainOfThought.opposingCounselStance}
@@ -337,7 +342,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                       {/* Commercial Risk Assessment */}
                       <div>
                         <div className="text-[11px] font-bold text-warn uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                          <Eye size={13} /> Commercial Risk Assessment
+                          <Eye size={13} /> {L("Commercial Risk Assessment", "বাণিজ্যিক ঝুঁকি মূল্যায়ন")}
                         </div>
                         <p className="text-xs text-muted leading-relaxed pl-4 border-l-2 border-warn/40">
                           {r.chainOfThought.commercialRiskAssessment}
@@ -347,7 +352,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                       {/* Legal Rationale */}
                       <div>
                         <div className="text-[11px] font-bold text-brand-2 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                          <Sparkles size={13} /> Legal Rationale & Doctrine
+                          <Sparkles size={13} /> {L("Legal Rationale & Doctrine", "আইনি যুক্তি ও নীতি")}
                         </div>
                         <p className="text-xs text-muted leading-relaxed pl-4 border-l-2 border-brand-2/40">
                           {r.chainOfThought.legalRationale}
@@ -357,7 +362,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                       {/* Negotiation Talking Point */}
                       <div className="p-3 rounded-lg bg-brand/10 border border-brand/20">
                         <div className="text-[11px] font-bold text-brand uppercase tracking-wider flex items-center gap-1.5 mb-1">
-                          <MessageSquare size={13} /> Counsel Negotiation Script (What to say)
+                          <MessageSquare size={13} /> {L("Counsel Negotiation Script (What to say)", "আলোচনায় কী বলবেন")}
                         </div>
                         <p className="text-xs text-white/90 italic font-medium leading-relaxed">
                           "{r.chainOfThought.negotiationTalkingPoint}"

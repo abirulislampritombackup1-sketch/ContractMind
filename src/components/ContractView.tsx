@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FileEdit, FileText, ListOrdered, MapPin, Scale, SearchX } from "lucide-react";
 import { Finding, FindingKind, Tone } from "../utils/findings";
+import { RULES_BN, TERMS_BN } from "../i18n/dataBn";
 
 interface Props {
   text: string;
@@ -24,6 +25,13 @@ const KIND_META: Record<FindingKind, { icon: React.ReactNode; en: string; bn: st
  */
 export const ContractView: React.FC<Props> = ({ text, findings, selectedId, onSelect, lang = "en" }) => {
   const L = (en: string, bn: string) => (lang === "bn" ? bn : en);
+  const STATUS_BN: Record<string, string> = { ...TERMS_BN, "Not Addressed": "উল্লেখ নেই" };
+  const titleOf = (f: Finding) => {
+    if (lang !== "bn" || f.kind !== "rule") return f.title;
+    const m = f.title.match(/^(\S+) · (.*) — ([^—]+)$/);
+    if (!m) return f.title;
+    return `${m[1]} · ${RULES_BN[m[1]]?.title || m[2]} — ${STATUS_BN[m[3]] || m[3]}`;
+  };
   const [filter, setFilter] = useState<Filter>("all");
   const docRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -127,14 +135,14 @@ export const ContractView: React.FC<Props> = ({ text, findings, selectedId, onSe
               <button key={f.id} data-item={f.id} className={`cvItem ${f.tone} ${sel ? "sel" : ""}`} onClick={() => onSelect(sel ? null : f.id)}>
                 <div className="cvItemTop">
                   <span className="cvKind">{KIND_META[f.kind].icon} {L(KIND_META[f.kind].en, KIND_META[f.kind].bn)}</span>
-                  <span className="cvRef">{f.ref}</span>
+                  <span className="cvRef">{f.ref === "Missing" ? L("Missing", "অনুপস্থিত") : f.ref}</span>
                   {f.start === undefined ? (
                     <span className="tag neutral"><SearchX size={11} /> {f.ref === "Missing" ? L("Missing", "অনুপস্থিত") : L("Not located", "পাওয়া যায়নি")}</span>
                   ) : (
                     <span className="tag ok"><MapPin size={11} /> {f.how === "quote" ? L("Exact quote", "হুবহু উদ্ধৃতি") : L("Section", "ধারা")}</span>
                   )}
                 </div>
-                <b>{f.title}</b>
+                <b>{titleOf(f)}</b>
                 {sel && <p>{f.detail}</p>}
               </button>
             );
@@ -162,7 +170,7 @@ export const ContractView: React.FC<Props> = ({ text, findings, selectedId, onSe
                 key={selHere ? `${i}-${flash}` : i}
                 className={`hl ${(selHere || top).tone} ${selHere ? "sel" : ""}`}
                 data-anchor={anchors[0]?.id}
-                title={p.ids.map((f) => `${L(KIND_META[f.kind].en, KIND_META[f.kind].bn)} · ${f.title}`).join("\n")}
+                title={p.ids.map((f) => `${L(KIND_META[f.kind].en, KIND_META[f.kind].bn)} · ${titleOf(f)}`).join("\n")}
                 onClick={() => {
                   // Pick the most specific finding here; repeat clicks cycle through overlaps.
                   const ordered = [...p.ids].sort((a, b) => a.end! - a.start! - (b.end! - b.start!));

@@ -14,6 +14,8 @@ import {
   TrendingDown,
   Sparkles,
 } from "lucide-react";
+import { useLang } from "../i18n/lang";
+import { playbookLabel } from "../i18n/dataBn";
 
 interface AnalysisOverviewProps {
   analysis: ContractAnalysisResult;
@@ -22,6 +24,8 @@ interface AnalysisOverviewProps {
 }
 
 export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, onNavigateTab, scorecard }) => {
+  const { L, term, bn } = useLang();
+  const pbName = playbookLabel(analysis.playbookUsed, bn);
   const isCritical = analysis.overallRiskScore >= 70;
   const isWarning = analysis.overallRiskScore >= 40 && analysis.overallRiskScore < 70;
 
@@ -35,11 +39,11 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
               {analysis.contractTitle}
             </span>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-surface-solid border border-line text-muted">
-              Calibrated to: <b className="text-white">{analysis.playbookUsed}</b>
+              {L("Calibrated to:", "যে প্লেবুক অনুযায়ী:")} <b className="text-white">{pbName}</b>
             </span>
           </div>
 
-          <h2 className="text-2xl font-black text-white tracking-tight">Contract Risk & Exposure Assessment</h2>
+          <h2 className="text-2xl font-black text-white tracking-tight">{L("Contract Risk & Exposure Assessment", "চুক্তির ঝুঁকি ও দায় মূল্যায়ন")}</h2>
           <p className="text-muted text-xs leading-relaxed">{analysis.summary}</p>
 
           {/* Parties */}
@@ -48,7 +52,7 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
               <div key={idx} className="flex items-center gap-1.5 text-white/90">
                 <Building2 size={13} className="text-brand" />
                 <span>
-                  <b>{p?.name || "Party"}</b> ({p?.role || "Role"})
+                  <b>{p?.name || L("Party", "পক্ষ")}</b> ({term(p?.role) || L("Role", "ভূমিকা")})
                 </span>
               </div>
             ))}
@@ -71,20 +75,20 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
           </div>
 
           <div className="space-y-1">
-            <div className="text-xs text-muted font-medium">Overall Exposure</div>
+            <div className="text-xs text-muted font-medium">{L("Overall Exposure", "সামগ্রিক ঝুঁকি")}</div>
             <div
               className={`text-base font-extrabold ${
                 isCritical ? "text-danger" : isWarning ? "text-warn" : "text-brand"
               }`}
             >
-              {analysis.riskLevel} Risk
+              {L(`${analysis.riskLevel} Risk`, `${term(analysis.riskLevel)} ঝুঁকি`)}
             </div>
             <div className="text-[11px] text-faint">
               {isCritical
-                ? "Immediate redline required"
+                ? L("Immediate redline required", "এখনই সংশোধন প্রয়োজন")
                 : isWarning
-                ? "Negotiation recommended"
-                : "Acceptable standard"}
+                ? L("Negotiation recommended", "আলোচনার পরামর্শ দেওয়া হচ্ছে")
+                : L("Acceptable standard", "গ্রহণযোগ্য মান")}
             </div>
           </div>
         </div>
@@ -102,9 +106,9 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
             </div>
             <div>
               <div className="text-sm font-bold text-white group-hover:text-brand transition-colors">
-                Interactive Redlines
+                {L("Interactive Redlines", "রেডলাইন")}
               </div>
-              <div className="text-xs text-muted">{analysis.redlines.length} clause edits ready</div>
+              <div className="text-xs text-muted">{analysis.redlines.length} {L("clause edits ready", "টি ধারা সংশোধন প্রস্তুত")}</div>
             </div>
           </div>
           <ArrowRight size={16} className="text-muted group-hover:text-brand transition-transform group-hover:translate-x-1" />
@@ -120,9 +124,9 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
             </div>
             <div>
               <div className="text-sm font-bold text-white group-hover:text-brand-2 transition-colors">
-                Obligations & Milestones
+                {L("Obligations & Milestones", "বাধ্যবাধকতা ও মাইলস্টোন")}
               </div>
-              <div className="text-xs text-muted">{analysis.obligations.length} duties extracted</div>
+              <div className="text-xs text-muted">{analysis.obligations.length} {L("duties extracted", "টি দায়িত্ব পাওয়া গেছে")}</div>
             </div>
           </div>
           <ArrowRight size={16} className="text-muted group-hover:text-brand-2 transition-transform group-hover:translate-x-1" />
@@ -138,9 +142,9 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
             </div>
             <div>
               <div className="text-sm font-bold text-white group-hover:text-warn transition-colors">
-                Gold Standard RAG
+                {L("Gold Standard Benchmarks", "আদর্শ ধারার তুলনা")}
               </div>
-              <div className="text-xs text-muted">{analysis.benchmarkComparisons.length} benchmark comparisons</div>
+              <div className="text-xs text-muted">{analysis.benchmarkComparisons.length} {L("benchmark comparisons", "টি তুলনা")}</div>
             </div>
           </div>
           <ArrowRight size={16} className="text-muted group-hover:text-warn transition-transform group-hover:translate-x-1" />
@@ -152,7 +156,7 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
       {/* Key Facts Grid */}
       {(analysis.keyFacts || []).length > 0 && (
         <div className="bg-surface p-6 rounded-2xl border border-line space-y-4">
-          <h3 className="font-bold text-white text-base">Key Extracted Contract Facts</h3>
+          <h3 className="font-bold text-white text-base">{L("Key Extracted Contract Facts", "চুক্তির মূল তথ্য")}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {(analysis.keyFacts || []).map((kf, idx) => (
               <div key={idx} className="p-3.5 rounded-xl bg-surface-solid border border-line">
@@ -167,8 +171,8 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
       {/* Category Risk Breakdown */}
       <div className="bg-surface p-6 rounded-2xl border border-line space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-white text-base">Clause Risk Category Breakdown</h3>
-          <span className="text-xs text-muted">Evaluated against {analysis.playbookUsed}</span>
+          <h3 className="font-bold text-white text-base">{L("Clause Risk Category Breakdown", "বিভাগভিত্তিক ঝুঁকি")}</h3>
+          <span className="text-xs text-muted">{L("Evaluated against", "মূল্যায়নের ভিত্তি:")} {pbName}</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -180,7 +184,7 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
             return (
               <div key={idx} className="p-4 rounded-xl bg-surface-solid border border-line space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">{cat?.category || "General"}</span>
+                  <span className="text-xs font-bold text-white">{cat?.category || L("General", "সাধারণ")}</span>
                   <div className="flex items-center gap-2">
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -191,7 +195,7 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
                           : "bg-brand/20 text-brand"
                       }`}
                     >
-                      {cat?.status || "Pass"}
+                      {term(cat?.status || "Pass")}
                     </span>
                     <span
                       className={`text-xs font-bold ${
@@ -223,11 +227,11 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
       <div className="bg-surface p-6 rounded-2xl border border-line space-y-5">
         <div>
           <div className="flex items-center gap-2 text-brand text-xs font-bold tracking-wider uppercase mb-1">
-            <Sparkles size={15} /> Collaborative Multi-Agent Reasoning
+            <Sparkles size={15} /> {L("Collaborative Multi-Agent Reasoning", "একাধিক এআই এজেন্টের বিশ্লেষণ")}
           </div>
-          <h3 className="font-bold text-white text-lg">Adversarial & Commercial Agent Perspectives</h3>
+          <h3 className="font-bold text-white text-lg">{L("Adversarial & Commercial Agent Perspectives", "প্রতিপক্ষ ও বাণিজ্যিক দৃষ্টিভঙ্গি")}</h3>
           <p className="text-xs text-muted mt-0.5">
-            Different AI agents simulate opposing counsel aggressiveness vs commercial business deal velocity.
+            {L("Different AI agents simulate opposing counsel aggressiveness vs commercial business deal velocity.", "বিভিন্ন এআই এজেন্ট প্রতিপক্ষ আইনজীবীর কঠোর অবস্থান এবং দ্রুত চুক্তি সম্পন্ন করার বাণিজ্যিক দৃষ্টিভঙ্গি তুলে ধরে।")}
           </p>
         </div>
 
@@ -256,16 +260,16 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
                           isOpposing ? "text-danger" : isDealmaker ? "text-brand-2" : "text-brand"
                         }`}
                       >
-                        {agent?.agent || "Agent"}
+                        {term(agent?.agent) || L("Agent", "এজেন্ট")}
                       </h4>
                       <div className="text-[10px] text-faint">{agent?.roleDescription}</div>
                     </div>
                   </div>
 
-                  <div className="text-xs text-white/90 italic mb-3">"{agent?.stance || "Review required"}"</div>
+                  <div className="text-xs text-white/90 italic mb-3">"{agent?.stance || L("Review required", "পর্যালোচনা প্রয়োজন")}"</div>
 
                   <div className="space-y-1.5">
-                    <div className="text-[11px] font-bold text-muted uppercase tracking-wider">Key Arguments:</div>
+                    <div className="text-[11px] font-bold text-muted uppercase tracking-wider">{L("Key Arguments:", "মূল যুক্তি:")}</div>
                     <ul className="space-y-1 pl-4 list-disc text-xs text-muted marker:text-brand">
                       {(agent?.keyPoints || []).map((kp, kpIdx) => (
                         <li key={kpIdx}>{kp}</li>
@@ -275,9 +279,9 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
                 </div>
 
                 <div className="pt-3 border-t border-line/60">
-                  <div className="text-[11px] font-bold text-white mb-1">Recommended Move:</div>
+                  <div className="text-[11px] font-bold text-white mb-1">{L("Recommended Move:", "পরামর্শকৃত পদক্ষেপ:")}</div>
                   <div className="text-xs text-muted leading-relaxed bg-black/20 p-2.5 rounded-lg">
-                    {agent?.counterOfferRecommendation || "Review carefully."}
+                    {agent?.counterOfferRecommendation || L("Review carefully.", "সতর্কভাবে পর্যালোচনা করুন।")}
                   </div>
                 </div>
               </div>

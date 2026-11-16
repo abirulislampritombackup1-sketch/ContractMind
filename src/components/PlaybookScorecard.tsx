@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { AlertTriangle, CheckCircle2, CircleSlash, Info, MapPin, MinusCircle, RotateCcw, Scale, SlidersHorizontal, XCircle } from "lucide-react";
 import { PlaybookScoring, RuleStatus } from "../types";
 import { STATUS_FACTOR, scoreOf } from "../utils/scoring";
+import { RULES_BN, TERMS_BN } from "../i18n/dataBn";
 
 interface Props {
   scoring: PlaybookScoring;
@@ -69,8 +70,8 @@ export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWe
           </div>
           <small>
             {L("Each rule adds weight × ", "প্রতিটি নিয়ম যোগ করে ওজন × ")}
-            <span className="tag danger">Fail 1</span> <span className="tag warn">{L("Not addressed", "উল্লেখ নেই")} {STATUS_FACTOR["Not Addressed"]}</span>{" "}
-            <span className="tag warn">Partial {STATUS_FACTOR.Partial}</span> <span className="tag ok">Pass 0</span>
+            <span className="tag danger">{L("Fail", "ব্যর্থ")} 1</span> <span className="tag warn">{L("Not addressed", "উল্লেখ নেই")} {STATUS_FACTOR["Not Addressed"]}</span>{" "}
+            <span className="tag warn">{L("Partial", "আংশিক")} {STATUS_FACTOR.Partial}</span> <span className="tag ok">{L("Pass", "উত্তীর্ণ")} 0</span>
           </small>
         </div>
         <div className="scCounts">
@@ -97,7 +98,7 @@ export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWe
               <div className="scRuleTop">
                 <span className={`tag ${meta.cls}`}>{meta.icon} {L(meta.en, meta.bn)}</span>
                 <span className="scRuleId">{r.ruleId}</span>
-                <b className="scRuleTitle">{r.ruleTitle}</b>
+                <b className="scRuleTitle">{(lang === "bn" && RULES_BN[r.ruleId]?.title) || r.ruleTitle}</b>
                 {onShowInContract && locatedIds?.has(`rule:${r.ruleId}`) && (
                   <button className="locBtn" onClick={() => onShowInContract(r.ruleId)}>
                     <MapPin size={12} /> {L("Show in contract", "চুক্তিতে দেখুন")}
@@ -109,7 +110,7 @@ export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWe
               </div>
               <div className="scBar"><i style={{ width: `${(100 * r.pointsLost) / maxLost}%` }} /></div>
               <p className="scWhy">
-                <span className="text-faint">{r.category} · {r.clauseRef}</span> — {r.explanation}
+                <span className="text-faint">{(lang === "bn" && TERMS_BN[r.category]) || r.category} · {r.clauseRef}</span> — {r.explanation}
               </p>
               {r.evidence && (
                 <blockquote className="scQuote">

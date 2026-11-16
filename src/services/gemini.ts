@@ -1,6 +1,7 @@
 import { ContractAnalysisResult, Playbook } from "../types";
 import { GOLD_STANDARD_CLAUSES } from "../data/goldStandards";
 import { Language } from "../i18n/translations";
+import { PLAYBOOKS_BN } from "../i18n/dataBn";
 import { SAMPLE_CONTRACTS } from "../data/sampleContracts";
 import { applyScoring, buildScoring } from "../utils/scoring";
 import { RAG_CONFIG } from "../rag/config";
@@ -82,8 +83,14 @@ export async function callGemini(body: any): Promise<{ res: Response; model: str
     console.warn(`[ContractMind] ${lastError}; trying next option.`);
   }
   if (last) return last;
-  throw new Error(`The AI service is not responding right now (${lastError}). Please try again in a minute.`);
+  throw new Error(M(`The AI service is not responding right now (${lastError}). Please try again in a minute.`, `এআই সার্ভিস এখন সাড়া দিচ্ছে না (${lastError})। এক মিনিট পরে আবার চেষ্টা করুন।`));
 }
+
+// User-facing messages follow the language saved by the EN / বাংলা toggle.
+const uiBn = () => {
+  try { return localStorage.getItem("cm-lang") === "bn"; } catch { return false; }
+};
+const M = (en: string, bn: string) => (uiBn() ? bn : en);
 
 export async function geminiErrorMessage(res: Response, model: string): Promise<string> {
   let detail = "";
@@ -91,16 +98,23 @@ export async function geminiErrorMessage(res: Response, model: string): Promise<
     detail = (await res.json())?.error?.message || "";
   } catch {}
   if (res.status === 401 || res.status === 403 || /api key/i.test(detail)) {
-    return `Gemini rejected the request (${res.status}). Check GEMINI_API_KEY in .env and restart the server. ${detail}`.trim();
+    return M(`Gemini rejected the request (${res.status}). Check GEMINI_API_KEY in .env and restart the server. ${detail}`, `Gemini অনুরোধটি গ্রহণ করেনি (${res.status})। সার্ভারের GEMINI_API_KEY ঠিক আছে কিনা দেখুন। ${detail}`).trim();
   }
   if (res.status === 404) {
-    return `Gemini model "${model}" was not found (404). Check VITE_GEMINI_MODEL / VITE_GEMINI_FALLBACK_MODEL in .env. ${detail}`.trim();
+    return M(`Gemini model "${model}" was not found (404). Check VITE_GEMINI_MODEL / VITE_GEMINI_FALLBACK_MODEL in .env. ${detail}`, `Gemini মডেল "${model}" পাওয়া যায়নি (404)। VITE_GEMINI_MODEL সেটিং দেখুন। ${detail}`).trim();
   }
   if (res.status === 503 || res.status === 429) {
-    return `Gemini is overloaded right now (${res.status}) on both the main and backup model. Please try again in a minute.`;
+    return M(`Gemini is overloaded right now (${res.status}) on both the main and backup model. Please try again in a minute.`, `এই মুহূর্তে Gemini-তে অতিরিক্ত চাপ (${res.status})। এক মিনিট পরে আবার চেষ্টা করুন।`);
   }
-  return `Gemini request failed (${res.status}). ${detail}`.trim();
+  return M(`Gemini request failed (${res.status}). ${detail}`, `Gemini অনুরোধ ব্যর্থ হয়েছে (${res.status})। ${detail}`).trim();
 }
+
+const AGENT_LABEL_BN: Record<string, string> = {
+  "Risk score & agent perspectives": "ঝুঁকি স্কোর ও এজেন্টের দৃষ্টিভঙ্গি",
+  Redlines: "রেডলাইন",
+  "Obligations & payment milestones": "বাধ্যবাধকতা ও পেমেন্ট মাইলস্টোন",
+  "Gold Standard benchmark comparison": "আদর্শ ধারার তুলনা",
+};
 
 export async function toBase64(f: File): Promise<string> {
   const buf = new Uint8Array(await f.arrayBuffer());
@@ -429,13 +443,13 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
       const data = await res.json();
       logUsage(a.key, model, data?.usageMetadata, { mode, chunksSent: sent?.n, chunksTotal: sent?.total });
       const rawText: string = usageText(data);
-      if (!rawText.trim()) throw new Error("Gemini returned an empty response.");
+      if (!rawText.trim()) throw new Error(M("Gemini returned an empty response.", "Gemini কোনো উত্তর দেয়নি।"));
       try {
         const parsed = JSON.parse(rawText.replace(/```json|```/gi, "").trim());
         modelsUsed.add(model);
         return parsed;
       } catch {
-        throw new Error("Gemini returned a response that was not valid JSON.");
+        throw new Error(M("Gemini returned a response that was not valid JSON.", "Gemini-র উত্তর সঠিক আকারে আসেনি।"));
       }
     };
 
@@ -446,7 +460,7 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
     settled.forEach((s, i) => {
       if (s.status === "fulfilled") byKey[agents[i].key] = s.value;
       else {
-        failed.push(agents[i].label);
+        failed.push(M(agents[i].label, AGENT_LABEL_BN[agents[i].label] || agents[i].label));
         console.warn(`[ContractMind] ${agents[i].label} failed:`, s.reason);
       }
     });
@@ -454,7 +468,7 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
     // Without the risk agent there is no score or summary — treat as a failure.
     if (!byKey.risk) {
       const reason = settled[0].status === "rejected" ? (settled[0].reason as Error)?.message : "";
-      throw new Error(reason || "The risk analysis could not be completed.");
+      throw new Error(reason || M("The risk analysis could not be completed.", "ঝুঁকি বিশ্লেষণ সম্পন্ন করা যায়নি।"));
     }
 
     let result = sanitizeResult(
@@ -751,7 +765,7 @@ function generateIntelligentFallback(text: string, playbook: Playbook, lang: Lan
     riskLevel: overallRiskScore > 75 ? "Critical" : "High",
     playbookUsed: playbook.name,
     summary: lang === "bn"
-      ? `${playbook.name} অনুযায়ী এই চুক্তিতে গ্রাহকের জন্য মারাত্মক একতরফা ঝুঁকি চিহ্নিত হয়েছে। প্রধান দুর্বলতাসমূহ: একপাক্ষিক ক্ষতিপূরণ (Section 5), মাত্র $১,০০০ এর নামমাত্র লায়াবিলিটি ক্যাপ (Section 6.2), এবং ভেন্ডরের এআই মডেল ট্রেইনিংয়ে কোম্পানির গোপনীয় তথ্য ব্যবহারের অধিকার (Section 4.2)। চুক্তি স্বাক্ষরের পূর্বে তাৎক্ষণিক রেডলাইন সংশোধন আবশ্যক।`
+      ? `${PLAYBOOKS_BN[playbook.id]?.name || playbook.name} অনুযায়ী এই চুক্তিতে গ্রাহকের জন্য মারাত্মক একতরফা ঝুঁকি চিহ্নিত হয়েছে। প্রধান দুর্বলতাসমূহ: একপাক্ষিক ক্ষতিপূরণ (Section 5), মাত্র $১,০০০ এর নামমাত্র লায়াবিলিটি ক্যাপ (Section 6.2), এবং ভেন্ডরের এআই মডেল ট্রেইনিংয়ে কোম্পানির গোপনীয় তথ্য ব্যবহারের অধিকার (Section 4.2)। চুক্তি স্বাক্ষরের পূর্বে তাৎক্ষণিক রেডলাইন সংশোধন আবশ্যক।`
       : `Contract contains significant asymmetric risk exposures for Customer under the ${playbook.name}. Key vulnerabilities identified in Unilateral Indemnification (Section 5), Token Liability Cap of $1,000 (Section 6.2), and broad license granting Vendor rights to ingest proprietary Customer Data for generative AI model training (Section 4.2). Immediate redlining required prior to execution.`,
     categoryScores: [
       {

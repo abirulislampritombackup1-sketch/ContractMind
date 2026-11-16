@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { Playbook, PlaybookRule } from "../types";
 import { DEFAULT_PLAYBOOKS } from "../data/playbooks";
 import { BookOpen, Shield, Check, Sliders, AlertTriangle, Scale, Plus, Sparkles } from "lucide-react";
+import { useLang } from "../i18n/lang";
+import { playbookText, ruleText } from "../i18n/dataBn";
 
 interface PlaybookStudioProps {
   currentPlaybook: Playbook;
@@ -9,6 +11,7 @@ interface PlaybookStudioProps {
 }
 
 export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook, onSelectPlaybook }) => {
+  const { L, bn, term } = useLang();
   const [activeTab, setActiveTab] = useState<string>(currentPlaybook.id);
   const [customPlaybook, setCustomPlaybook] = useState<Playbook>({
     ...currentPlaybook,
@@ -44,18 +47,18 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-6 rounded-2xl border border-line">
         <div>
           <div className="flex items-center gap-2 text-brand text-xs font-bold tracking-wider uppercase mb-1">
-            <BookOpen size={15} /> Playbook & Policy Governance
+            <BookOpen size={15} /> {L("Playbook & Policy Governance", "প্লেবুক ও নীতি ব্যবস্থাপনা")}
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">Contract Review Playbooks</h2>
+          <h2 className="text-xl font-bold text-white tracking-tight">{L("Contract Review Playbooks", "চুক্তি পর্যালোচনার প্লেবুক")}</h2>
           <p className="text-muted text-sm mt-1">
-            ContractMind calibrates risk discovery, agent perspectives, and redline recommendations based on your selected negotiating stance.
+            {L("ContractMind calibrates risk discovery, agent perspectives, and redline recommendations based on your selected negotiating stance.", "আপনার বেছে নেওয়া অবস্থান অনুযায়ী ContractMind ঝুঁকি খোঁজা, এজেন্টদের দৃষ্টিভঙ্গি এবং রেডলাইন পরামর্শ ঠিক করে।")}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-muted font-medium">Active Policy:</span>
+          <span className="text-xs text-muted font-medium">{L("Active Policy:", "সক্রিয় নীতি:")}</span>
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-brand/15 text-brand border border-brand/30 flex items-center gap-1.5">
-            <Shield size={13} /> {currentPlaybook.name}
+            <Shield size={13} /> {playbookText(currentPlaybook, bn).name}
           </span>
         </div>
       </div>
@@ -81,17 +84,17 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
                       isSelected ? "bg-brand text-brand-ink" : "bg-white/10 text-muted"
                     }`}
                   >
-                    {pb.badge}
+                    {playbookText(pb, bn).badge}
                   </span>
                   {isSelected && <Check size={16} className="text-brand font-bold" />}
                 </div>
-                <h3 className="font-bold text-white text-base mb-1.5">{pb.name}</h3>
-                <p className="text-xs text-muted line-clamp-3 leading-relaxed">{pb.description}</p>
+                <h3 className="font-bold text-white text-base mb-1.5">{playbookText(pb, bn).name}</h3>
+                <p className="text-xs text-muted line-clamp-3 leading-relaxed">{playbookText(pb, bn).description}</p>
               </div>
 
               <div className="mt-4 pt-3 border-t border-line/60 flex items-center justify-between text-[11px] text-faint">
-                <span>{pb.rules.length} Rule Modules</span>
-                <span className="text-brand font-semibold">{pb.tolerances.maxLiabilityMultiplier}x Cap Limit</span>
+                <span>{pb.rules.length} {L("Rule Modules", "টি নিয়ম")}</span>
+                <span className="text-brand font-semibold">{L(`${pb.tolerances.maxLiabilityMultiplier}x Cap Limit`, `দায়সীমা ${pb.tolerances.maxLiabilityMultiplier} গুণ`)}</span>
               </div>
             </div>
           );
@@ -112,17 +115,17 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-brand-2/20 text-brand-2">
-                Custom Policy
+                {L("Custom Policy", "কাস্টম নীতি")}
               </span>
               <Sliders size={16} className="text-brand-2" />
             </div>
-            <h3 className="font-bold text-white text-base mb-1.5">Interactive Custom Playbook</h3>
+            <h3 className="font-bold text-white text-base mb-1.5">{L("Interactive Custom Playbook", "নিজের মতো প্লেবুক")}</h3>
             <p className="text-xs text-muted leading-relaxed">
-              Create a custom compliance threshold with specific liability caps, notice windows, and AI training restrictions.
+              {L("Create a custom compliance threshold with specific liability caps, notice windows, and AI training restrictions.", "নির্দিষ্ট দায়সীমা, নোটিশের সময় এবং এআই প্রশিক্ষণের বিধিনিষেধ দিয়ে নিজের নীতি তৈরি করুন।")}
             </p>
           </div>
           <div className="mt-4 pt-3 border-t border-line/60 flex items-center justify-between text-[11px] text-brand-2 font-semibold">
-            <span>Configure Parameters</span>
+            <span>{L("Configure Parameters", "মান ঠিক করুন")}</span>
             <Sparkles size={13} />
           </div>
         </div>
@@ -134,19 +137,19 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
         <div className="bg-surface p-6 rounded-2xl border border-line space-y-5">
           <div className="flex items-center gap-2">
             <Sliders size={18} className="text-brand" />
-            <h3 className="text-base font-bold text-white">Risk Tolerances & Guardrails</h3>
+            <h3 className="text-base font-bold text-white">{L("Risk Tolerances & Guardrails", "ঝুঁকি সহনসীমা ও নিয়ন্ত্রণ")}</h3>
           </div>
           <p className="text-xs text-muted">
-            The scoring engine checks ingested clauses against these strict parameter boundaries.
+            {L("The scoring engine checks ingested clauses against these strict parameter boundaries.", "স্কোরিং ব্যবস্থা চুক্তির ধারাগুলো এই সীমার সাথে মিলিয়ে দেখে।")}
           </p>
 
           <div className="space-y-4 pt-2">
             {/* Max Liability Multiplier */}
             <div>
               <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-muted font-medium">Max Liability Cap Multiplier</span>
+                <span className="text-muted font-medium">{L("Max Liability Cap Multiplier", "সর্বোচ্চ দায়সীমা (ফি-র গুণ)")}</span>
                 <span className="text-brand font-bold">
-                  {currentPlaybook.tolerances.maxLiabilityMultiplier}x Annual Fees
+                  {L(`${currentPlaybook.tolerances.maxLiabilityMultiplier}x Annual Fees`, `বার্ষিক ফি-র ${currentPlaybook.tolerances.maxLiabilityMultiplier} গুণ`)}
                 </span>
               </div>
               <input
@@ -159,17 +162,17 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
                 className="w-full accent-brand cursor-pointer"
               />
               <div className="flex justify-between text-[10px] text-faint mt-1">
-                <span>0.5x (Strict)</span>
-                <span>1.0x (Market)</span>
-                <span>3.0x (Lenient)</span>
+                <span>{L("0.5x (Strict)", "০.৫ গুণ (কঠোর)")}</span>
+                <span>{L("1.0x (Market)", "১ গুণ (বাজার মান)")}</span>
+                <span>{L("3.0x (Lenient)", "৩ গুণ (নমনীয়)")}</span>
               </div>
             </div>
 
             {/* Mutual Indemnity Requirement */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-surface-solid border border-line">
               <div>
-                <div className="text-xs font-semibold text-white">Mandatory Mutual Indemnity</div>
-                <div className="text-[11px] text-muted">Flag unilateral clauses as critical risk</div>
+                <div className="text-xs font-semibold text-white">{L("Mandatory Mutual Indemnity", "পারস্পরিক ক্ষতিপূরণ বাধ্যতামূলক")}</div>
+                <div className="text-[11px] text-muted">{L("Flag unilateral clauses as critical risk", "একতরফা ধারাকে গুরুতর ঝুঁকি হিসেবে চিহ্নিত করুন")}</div>
               </div>
               <input
                 type="checkbox"
@@ -182,8 +185,8 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
             {/* Termination for Convenience */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-surface-solid border border-line">
               <div>
-                <div className="text-xs font-semibold text-white">Require Convenience Termination</div>
-                <div className="text-[11px] text-muted">Reject non-cancelable multi-year lock-ins</div>
+                <div className="text-xs font-semibold text-white">{L("Require Convenience Termination", "ইচ্ছাধীন বাতিলের সুযোগ আবশ্যক")}</div>
+                <div className="text-[11px] text-muted">{L("Reject non-cancelable multi-year lock-ins", "বাতিল-অযোগ্য বহু বছরের বাধ্যবাধকতা প্রত্যাখ্যান")}</div>
               </div>
               <input
                 type="checkbox"
@@ -196,8 +199,8 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
             {/* Convenience Notice Days */}
             <div>
               <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-muted font-medium">Convenience Notice Window</span>
-                <span className="text-brand-2 font-bold">{currentPlaybook.tolerances.convenienceNoticeDays} Days</span>
+                <span className="text-muted font-medium">{L("Convenience Notice Window", "ইচ্ছাধীন বাতিলের নোটিশ সময়")}</span>
+                <span className="text-brand-2 font-bold">{currentPlaybook.tolerances.convenienceNoticeDays} {L("Days", "দিন")}</span>
               </div>
               <input
                 type="range"
@@ -213,8 +216,8 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
             {/* Data Breach Notice Hours */}
             <div>
               <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-muted font-medium">Data Breach Notification SLA</span>
-                <span className="text-danger font-bold">{currentPlaybook.tolerances.requireDataBreachNoticeHours} Hours</span>
+                <span className="text-muted font-medium">{L("Data Breach Notification SLA", "ডেটা লঙ্ঘনের নোটিশের সময়সীমা")}</span>
+                <span className="text-danger font-bold">{currentPlaybook.tolerances.requireDataBreachNoticeHours} {L("Hours", "ঘণ্টা")}</span>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {[24, 48, 72].map((hours) => (
@@ -228,7 +231,7 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
                         : "bg-surface-solid border-line text-muted hover:text-white"
                     }`}
                   >
-                    {hours} Hours
+                    {hours} {L("Hours", "ঘণ্টা")}
                   </button>
                 ))}
               </div>
@@ -237,8 +240,8 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
             {/* Payment Terms Max Days */}
             <div>
               <div className="flex justify-between text-xs mb-1.5">
-                <span className="text-muted font-medium">Maximum Payment Window</span>
-                <span className="text-white font-bold">Net {currentPlaybook.tolerances.paymentTermsMaxDays}</span>
+                <span className="text-muted font-medium">{L("Maximum Payment Window", "পেমেন্টের সর্বোচ্চ সময়")}</span>
+                <span className="text-white font-bold">{L(`Net ${currentPlaybook.tolerances.paymentTermsMaxDays}`, `${currentPlaybook.tolerances.paymentTermsMaxDays} দিন`)}</span>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {[15, 30, 45, 60].map((days) => (
@@ -252,7 +255,7 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
                         : "bg-surface-solid border-line text-muted hover:text-white"
                     }`}
                   >
-                    Net {days}
+                    {L(`Net ${days}`, `${days} দিন`)}
                   </button>
                 ))}
               </div>
@@ -266,9 +269,9 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Scale size={18} className="text-brand" />
-                <h3 className="text-base font-bold text-white">Active Playbook Rules & Standards</h3>
+                <h3 className="text-base font-bold text-white">{L("Active Playbook Rules & Standards", "প্লেবুকের সক্রিয় নিয়ম ও মান")}</h3>
               </div>
-              <span className="text-xs text-muted">{currentPlaybook.rules.length} Active Rules</span>
+              <span className="text-xs text-muted">{currentPlaybook.rules.length} {L("Active Rules", "টি সক্রিয় নিয়ম")}</span>
             </div>
 
             <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
@@ -276,9 +279,9 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
                 <div key={rule.id} className="p-4 rounded-xl bg-surface-solid/70 border border-line space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white">{rule.title}</span>
+                      <span className="text-xs font-bold text-white">{ruleText(rule, bn).title}</span>
                       <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-line text-muted">
-                        {rule.category}
+                        {term(rule.category)}
                       </span>
                     </div>
                     <span
@@ -290,18 +293,18 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
                           : "bg-brand/20 text-brand"
                       }`}
                     >
-                      {rule.severity} (Weight {rule.weight}%)
+                      {L(`${rule.severity} (Weight ${rule.weight}%)`, `${term(rule.severity)} (ওজন ${rule.weight}%)`)}
                     </span>
                   </div>
 
                   <div className="text-xs text-muted leading-relaxed">
-                    <span className="text-brand font-semibold">Target Standard: </span>
-                    {rule.targetStandard}
+                    <span className="text-brand font-semibold">{L("Target Standard: ", "কাঙ্ক্ষিত মান: ")}</span>
+                    {ruleText(rule, bn).targetStandard}
                   </div>
 
                   <div className="text-xs text-faint">
-                    <span className="text-danger font-semibold">Unacceptable: </span>
-                    {rule.unacceptableTerms.join(" • ")}
+                    <span className="text-danger font-semibold">{L("Unacceptable: ", "অগ্রহণযোগ্য: ")}</span>
+                    {ruleText(rule, bn).unacceptableTerms.join(" • ")}
                   </div>
                 </div>
               ))}
@@ -310,13 +313,13 @@ export const PlaybookStudio: React.FC<PlaybookStudioProps> = ({ currentPlaybook,
 
           <div className="mt-4 pt-4 border-t border-line flex items-center justify-between">
             <span className="text-xs text-muted">
-              Scoring algorithms automatically compute compliance deviations against these benchmarks.
+              {L("Scoring algorithms automatically compute compliance deviations against these benchmarks.", "এই মানগুলোর সাথে চুক্তির বিচ্যুতি স্বয়ংক্রিয়ভাবে হিসাব করা হয়।")}
             </span>
             <button
               onClick={() => onSelectPlaybook(currentPlaybook)}
               className="primary"
             >
-              <Check size={16} /> Apply Playbook to Analysis
+              <Check size={16} /> {L("Apply Playbook to Analysis", "বিশ্লেষণে এই প্লেবুক ব্যবহার করুন")}
             </button>
           </div>
         </div>

@@ -12,12 +12,14 @@ import {
   ArrowRight,
   BookmarkCheck,
 } from "lucide-react";
+import { useLang } from "../i18n/lang";
 
 interface GoldStandardRAGProps {
   comparisons: BenchmarkComparison[];
 }
 
 export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons }) => {
+  const { L } = useLang();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCopyClause = (id: string, text: string) => {
@@ -37,17 +39,17 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-6 rounded-2xl border border-line">
         <div>
           <div className="flex items-center gap-2 text-brand text-xs font-bold tracking-wider uppercase mb-1">
-            <GitCompare size={15} /> RAG Benchmark Cross-Referencing
+            <GitCompare size={15} /> {L("Benchmark Cross-Referencing", "আদর্শ ধারার সাথে তুলনা")}
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">Gold Standard Clause Alignment</h2>
+          <h2 className="text-xl font-bold text-white tracking-tight">{L("Gold Standard Clause Alignment", "আদর্শ ধারার সাথে মিল")}</h2>
           <p className="text-muted text-sm mt-1">
-            Cross-references incoming contract clauses against company historical "Gold Standard" templates to identify missing protections and structural deviations.
+            {L('Cross-references incoming contract clauses against company historical "Gold Standard" templates to identify missing protections and structural deviations.', "চুক্তির ধারাগুলো প্রতিষ্ঠানের আদর্শ (গোল্ড স্ট্যান্ডার্ড) ধারার সাথে মিলিয়ে অনুপস্থিত সুরক্ষা ও বিচ্যুতি খুঁজে বের করে।")}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <div className="text-xs text-muted font-medium">Average Benchmark Fit</div>
+            <div className="text-xs text-muted font-medium">{L("Average Benchmark Fit", "গড় মিল")}</div>
             <div
               className={`text-2xl font-black ${
                 avgMatch >= 70 ? "text-brand" : avgMatch >= 40 ? "text-warn" : "text-danger"
@@ -65,7 +67,7 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
                 : "border-danger text-danger bg-danger/10"
             }`}
           >
-            {avgMatch >= 70 ? "HIGH" : avgMatch >= 40 ? "FAIR" : "LOW"}
+            {avgMatch >= 70 ? L("HIGH", "বেশি") : avgMatch >= 40 ? L("FAIR", "মাঝারি") : L("LOW", "কম")}
           </div>
         </div>
       </div>
@@ -91,7 +93,7 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted">Benchmark Match:</span>
+                  <span className="text-xs text-muted">{L("Benchmark Match:", "মিল:")}</span>
                   <div className="flex items-center gap-1.5">
                     <div className="w-24 h-2 bg-surface-solid rounded-full overflow-hidden border border-line">
                       <div
@@ -117,8 +119,8 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
                 {/* Contract Ingested Clause */}
                 <div className="p-4 rounded-xl bg-surface-solid/80 border border-line space-y-2">
                   <div className="text-[11px] font-bold text-muted uppercase tracking-wider flex items-center justify-between">
-                    <span>Ingested Contract Clause</span>
-                    <span className="text-danger font-mono text-[10px]">Current Exposure</span>
+                    <span>{L("Ingested Contract Clause", "চুক্তির ধারা")}</span>
+                    <span className="text-danger font-mono text-[10px]">{L("Current Exposure", "বর্তমান ঝুঁকি")}</span>
                   </div>
                   <div className="text-xs text-white/80 leading-relaxed font-mono bg-black/30 p-3 rounded-lg border border-line/40">
                     {c.contractClauseText}
@@ -135,7 +137,7 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
                       onClick={() => handleCopyClause(String(idx), c.goldStandardText)}
                       className="text-[10px] text-brand hover:underline flex items-center gap-1 normal-case"
                     >
-                      <Copy size={11} /> {copiedId === String(idx) ? "Copied!" : "Copy"}
+                      <Copy size={11} /> {copiedId === String(idx) ? L("Copied!", "কপি হয়েছে!") : L("Copy", "কপি")}
                     </button>
                   </div>
                   <div className="text-xs text-brand/90 leading-relaxed font-mono bg-black/30 p-3 rounded-lg border border-brand/20">
@@ -149,7 +151,7 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
                 {/* Specific Deviations */}
                 <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/20 space-y-2">
                   <div className="text-xs font-bold text-danger flex items-center gap-1.5">
-                    <AlertTriangle size={14} /> Identified Deviations from Gold Standard:
+                    <AlertTriangle size={14} /> {L("Identified Deviations from Gold Standard:", "আদর্শ থেকে বিচ্যুতি:")}
                   </div>
                   <ul className="space-y-1 pl-4 list-disc text-xs text-muted marker:text-danger">
                     {c.deviations.map((dev, dIdx) => (
@@ -161,7 +163,7 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
                 {/* Missing Protections */}
                 <div className="p-3.5 rounded-xl bg-warn/10 border border-warn/20 space-y-2">
                   <div className="text-xs font-bold text-warn flex items-center gap-1.5">
-                    <ShieldCheck size={14} /> Missing Required Protections:
+                    <ShieldCheck size={14} /> {L("Missing Required Protections:", "অনুপস্থিত প্রয়োজনীয় সুরক্ষা:")}
                   </div>
                   <ul className="space-y-1 pl-4 list-disc text-xs text-muted marker:text-warn">
                     {c.missingProtections.map((prot, pIdx) => (
@@ -175,7 +177,7 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
               <div className="p-3 rounded-xl bg-surface-solid border border-line flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <Sparkles size={14} className="text-brand-2" />
-                  <span className="font-semibold text-white">Recommended Strategy:</span>
+                  <span className="font-semibold text-white">{L("Recommended Strategy:", "পরামর্শকৃত কৌশল:")}</span>
                   <span className="text-muted">{c.recommendation}</span>
                 </div>
               </div>

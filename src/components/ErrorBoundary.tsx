@@ -1,6 +1,11 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
+const isBn = () => {
+  try { return localStorage.getItem("cm-lang") === "bn"; } catch { return false; }
+};
+const T = (en: string, bn: string) => (isBn() ? bn : en);
+
 interface Props {
   children: ReactNode;
   fallbackPage?: () => void;
@@ -18,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, errorMessage: error.message || "An unexpected rendering error occurred." };
+    return { hasError: true, errorMessage: error.message || T("An unexpected rendering error occurred.", "অপ্রত্যাশিত একটি সমস্যা হয়েছে।") };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -45,10 +50,10 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="font-bold text-lg"
                 style={{ color: "var(--text)", margin: 0 }}
               >
-                Analysis Display Error
+                {T("Analysis Display Error", "ফলাফল দেখাতে সমস্যা")}
               </h2>
               <p className="text-xs" style={{ color: "var(--muted)", margin: "4px 0 0" }}>
-                The AI returned data in an unexpected format. Your analysis data is preserved.
+                {T("The AI returned data in an unexpected format. Your analysis data is preserved.", "এআই অপ্রত্যাশিত আকারে তথ্য দিয়েছে। আপনার বিশ্লেষণের তথ্য সংরক্ষিত আছে।")}
               </p>
             </div>
           </div>
@@ -66,7 +71,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
           <div className="flex items-center gap-3">
             <button className="primary" onClick={this.handleRetry}>
-              <RotateCcw size={15} /> Retry Rendering
+              <RotateCcw size={15} /> {T("Retry Rendering", "আবার দেখান")}
             </button>
             {this.props.fallbackPage && (
               <button
@@ -76,7 +81,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   this.props.fallbackPage?.();
                 }}
               >
-                Return to Dashboard
+                {T("Return to Dashboard", "সারসংক্ষেপে ফিরুন")}
               </button>
             )}
           </div>

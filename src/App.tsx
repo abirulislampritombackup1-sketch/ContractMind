@@ -42,6 +42,8 @@ import { runContractIntelligence, AgentKey, AgentState } from "./services/gemini
 import { RAG_CONFIG } from "./rag/config";
 import { indexDocument } from "./rag";
 import { Language } from "./i18n/translations";
+import { LangProvider } from "./i18n/lang";
+import { SAMPLES_BN, playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
 import { PlaybookStudio } from "./components/PlaybookStudio";
 import { AnalysisOverview } from "./components/AnalysisOverview";
 import { RedlineViewer } from "./components/RedlineViewer";
@@ -80,6 +82,7 @@ export default function App() {
   const [lang, setLang] = useState<Language>(() => (store.get("cm-lang") === "bn" ? "bn" : "en"));
   const [theme, setTheme] = useState<"light" | "dark">(() => (store.get("cm-theme") === "dark" ? "dark" : "light"));
   const L = (en: string, bn: string) => (lang === "bn" ? bn : en);
+  const pbName = (pb: Playbook) => playbookText(pb, lang === "bn").name;
 
   const [view, setView] = useState<View>("review");
   const [resultTab, setResultTab] = useState<ResultTab>("Analysis");
@@ -226,6 +229,7 @@ export default function App() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
+    <LangProvider lang={lang}>
     <div className="app">
       <header className="topbar">
         <div className="topbarInner">
@@ -283,7 +287,7 @@ export default function App() {
 
         {/* ───────────── REVIEW ───────────── */}
         {view === "review" && isAnalyzing && (
-          <AnalyzingScreen L={L} lang={lang} progress={progress} docName={docName} playbook={currentPlaybook.name} />
+          <AnalyzingScreen L={L} lang={lang} progress={progress} docName={docName} playbook={pbName(currentPlaybook)} />
         )}
 
         {view === "review" && !isAnalyzing && showResults && analysisResult && (
@@ -378,9 +382,9 @@ export default function App() {
                       className={`sample ${!file && contractText === s.text ? "on" : ""}`}
                       onClick={() => handleLoadSample(s)}
                     >
-                      <span className="tag brand">{s.badge}</span>
-                      <b>{s.name}</b>
-                      <small>{s.type}</small>
+                      <span className="tag brand">{lang === "bn" ? s.badge.replace("Dataset", "ডেটাসেট") : s.badge}</span>
+                      <b>{(lang === "bn" && SAMPLES_BN[s.id]?.name) || s.name}</b>
+                      <small>{(lang === "bn" && SAMPLES_BN[s.id]?.type) || s.type}</small>
                     </button>
                   ))}
                 </div>
@@ -409,8 +413,8 @@ export default function App() {
                     >
                       <span className="radio" />
                       <span>
-                        <b>{pb.badge}</b>
-                        <small>{pb.name}</small>
+                        <b>{playbookText(pb, lang === "bn").badge}</b>
+                        <small>{pbName(pb)}</small>
                       </span>
                     </button>
                   ))}
@@ -453,7 +457,7 @@ export default function App() {
               currentPlaybook={currentPlaybook}
               onSelectPlaybook={(pb: Playbook) => {
                 setCurrentPlaybook(pb);
-                setNotice({ kind: "ok", text: L(`Playbook selected: ${pb.name}`, `প্লেবুক নির্বাচিত: ${pb.name}`) });
+                setNotice({ kind: "ok", text: L(`Playbook selected: ${pb.name}`, `প্লেবুক নির্বাচিত: ${pbName(pb)}`) });
               }}
             />
           </>
@@ -485,7 +489,7 @@ export default function App() {
             <PageIntro
               title={L("Land Guide", "জমি গাইড")}
               desc={L(
-                "Get inherited land recorded in the heirs' names without a broker: steps, offices, a share calculator and a khatian reader. Content is in Bangla.",
+                "Get inherited land recorded in the heirs' names without a broker: steps, offices, a share calculator and a khatian reader. Page content is in Bangla.",
                 "ওয়ারিশ সূত্রে পাওয়া জমি দালাল ছাড়া নিজেদের নামে নেওয়ার ধাপ, কাগজ, অফিস, ভাগের হিসাব আর খতিয়ান পড়া।"
               )}
             />
@@ -517,12 +521,14 @@ export default function App() {
         {L("ContractMind · AI-assisted review, not legal advice", "কন্ট্রাক্টমাইন্ড · এআই-সহায়িত পর্যালোচনা, আইনি পরামর্শ নয়")}
       </footer>
     </div>
+    </LangProvider>
   );
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
 type LFn = (en: string, bn: string) => string;
+
 
 function PageIntro({ title, desc, action }: { title: string; desc: string; action?: React.ReactNode }) {
   return (
@@ -620,7 +626,7 @@ function RiskGauge({ score, label }: { score: number; label: string }) {
   const r = 40;
   const c = 2 * Math.PI * r;
   return (
-    <div className="gauge" aria-label={`Risk score ${score} of 100`}>
+    <div className="gauge" aria-label={`${label} ${score}/100`}>
       <svg width="92" height="92" viewBox="0 0 92 92">
         <circle cx="46" cy="46" r={r} fill="none" stroke="rgb(255 255 255 / 0.22)" strokeWidth="8" />
         <circle cx="46" cy="46" r={r} fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} />
@@ -681,9 +687,9 @@ function ResultsWorkspace(props: {
           <h1>{result.contractTitle}</h1>
           <div className="meta">
             {result.parties.slice(0, 3).map((p, i) => (
-              <span key={i}><Users size={11} style={{ verticalAlign: "-1px", marginRight: 5 }} />{p.name} · {p.role}</span>
+              <span key={i}><Users size={11} style={{ verticalAlign: "-1px", marginRight: 5 }} />{p.name} · {lang === "bn" ? TERMS_BN[p.role] ?? p.role : p.role}</span>
             ))}
-            <span><BookOpen size={11} style={{ verticalAlign: "-1px", marginRight: 5 }} />{result.playbookUsed}</span>
+            <span><BookOpen size={11} style={{ verticalAlign: "-1px", marginRight: 5 }} />{playbookLabel(result.playbookUsed, lang === "bn")}</span>
             {result.modelsUsed?.length ? <span><Zap size={11} style={{ verticalAlign: "-1px", marginRight: 5 }} />{result.modelsUsed.join(", ")}</span> : null}
           </div>
         </div>
@@ -715,7 +721,7 @@ function ResultsWorkspace(props: {
               result.scoring ? (
                 <PlaybookScorecard
                   scoring={result.scoring}
-                  playbookName={result.playbookUsed}
+                  playbookName={playbookLabel(result.playbookUsed, lang === "bn")}
                   onWeightsChange={props.onWeightsChange}
                   lang={lang}
                   locatedIds={locatedIds}
