@@ -52,6 +52,7 @@ export function buildScoring(rawAssessments: any[], playbook: Playbook, contract
       status,
       clauseRef: typeof a?.clauseRef === "string" && a.clauseRef.trim() ? a.clauseRef.trim() : "—",
       evidence: hasQuote ? evidence : "",
+      evidenceBn: hasQuote && typeof a?.evidenceBn === "string" && a.evidenceBn.trim() ? a.evidenceBn.trim() : undefined,
       explanation: typeof a?.explanation === "string" ? a.explanation : "The analysis did not assess this rule.",
       verified: hasQuote && hay ? !!locateQuote(hay, evidence) : undefined,
       pointsLost: 0,

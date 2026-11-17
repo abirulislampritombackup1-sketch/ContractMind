@@ -24,7 +24,7 @@ interface AnalysisOverviewProps {
 }
 
 export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, onNavigateTab, scorecard }) => {
-  const { L, term, bn } = useLang();
+  const { L, term, bn, num } = useLang();
   const pbName = playbookLabel(analysis.playbookUsed, bn);
   const isCritical = analysis.overallRiskScore >= 70;
   const isWarning = analysis.overallRiskScore >= 40 && analysis.overallRiskScore < 70;
@@ -70,8 +70,8 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
                 : "border-brand text-brand bg-brand/10"
             }`}
           >
-            <span className="text-2xl font-black leading-none">{analysis.overallRiskScore}</span>
-            <span className="text-[10px] font-semibold uppercase mt-0.5 tracking-wider">/ 100</span>
+            <span className="text-2xl font-black leading-none">{num(analysis.overallRiskScore)}</span>
+            <span className="text-[10px] font-semibold uppercase mt-0.5 tracking-wider">/ {num(100)}</span>
           </div>
 
           <div className="space-y-1">
@@ -202,7 +202,7 @@ export const AnalysisOverview: React.FC<AnalysisOverviewProps> = ({ analysis, on
                         isCatCrit ? "text-danger" : isCatWarn ? "text-warn" : "text-brand"
                       }`}
                     >
-                      {score}/100
+                      {num(score)}/{num(100)}
                     </span>
                   </div>
                 </div>

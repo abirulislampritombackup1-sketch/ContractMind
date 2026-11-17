@@ -33,7 +33,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
   locatedIds,
   onShowInContract,
 }) => {
-  const { L, term } = useLang();
+  const { L, term, sec } = useLang();
   const [viewMode, setViewMode] = useState<"matrix" | "milestones" | "json">("matrix");
   const [filterObligor, setFilterObligor] = useState<string>("All");
   const [filterCategory, setFilterCategory] = useState<string>("All");
@@ -199,7 +199,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                     <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-brand/15 text-brand">
                       {o.id}
                     </span>
-                    <span className="text-xs text-faint">{o.clauseRef}</span>
+                    <span className="text-xs text-faint">{sec(o.clauseRef)}</span>
                     {onShowInContract && locatedIds?.has(`obl:${o.id}`) && (
                       <button className="locBtn" onClick={() => onShowInContract(o.id)} title={L("Highlight this clause in the original contract", "মূল চুক্তিতে এই ধারাটি দেখান")}>
                         {L("Show in contract", "চুক্তিতে দেখুন")}

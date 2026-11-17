@@ -136,7 +136,7 @@ const obj = (properties: Record<string, any>) => ({
   required: Object.keys(properties),
 });
 
-const RISK_SCHEMA = obj({
+const riskSchema = (bn: boolean) => obj({
   contractTitle: STR,
   parties: arr(obj({ name: STR, role: STR })),
   overallRiskScore: INT, // AI estimate, only used if rule assessments are missing
@@ -147,6 +147,7 @@ const RISK_SCHEMA = obj({
       status: en("Pass", "Partial", "Fail", "Not Addressed"),
       clauseRef: STR,
       evidence: STR,
+      ...(bn ? { evidenceBn: STR } : {}),
       explanation: STR,
     })
   ),
@@ -299,7 +300,7 @@ Write all descriptive text in formal, high-quality Bengali (বাংলা). Ke
     {
       key: "risk",
       label: "Risk score & agent perspectives",
-      schema: RISK_SCHEMA,
+      schema: riskSchema(lang === "bn"),
       retrieval: {
         queries: [
           "contract title, parties, effective date, term, governing law, key commercial terms",
@@ -315,7 +316,8 @@ Score the contract against the selected playbook:
 - ruleAssessments: assess EVERY playbook rule listed above, one item per rule, using its exact rule id (e.g. "R-INDEM-01"):
   * status: "Pass" (contract meets the target standard or an allowed fallback), "Partial" (partly meets it / weaker but not unacceptable), "Fail" (contains unacceptable terms or clearly breaches the target), "Not Addressed" (contract is silent on it).
   * clauseRef: the section that governs it (e.g. "Section 6.2"), or "None".
-  * evidence: an EXACT verbatim quote (max 200 characters) from the contract supporting the status — copy it character for character. Use "Not found" when the contract is silent.
+  * evidence: an EXACT verbatim quote (max 200 characters) from the contract supporting the status — copy it character for character. Use "Not found" when the contract is silent.${lang === "bn" ? `
+  * evidenceBn: what the evidence quote means, in simple Bengali (বাংলা), one sentence ("" when there is no quote). Keep evidence itself verbatim in the contract's language.` : ""}
   * explanation: one sentence on why.
   Where a playbook tolerance conflicts with a rule's target text, the tolerance wins.
 - overallRiskScore: your own 0-100 estimate (100 = critical exposure). The final score is computed from ruleAssessments, so focus on those.

@@ -39,7 +39,7 @@ import { runContractIntelligence, AgentKey, AgentState } from "./services/gemini
 import { RAG_CONFIG } from "./rag/config";
 import { indexDocument } from "./rag";
 import { Language } from "./i18n/translations";
-import { LangProvider } from "./i18n/lang";
+import { LangProvider, toBnDigits } from "./i18n/lang";
 import { playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
 import { PlaybookStudio } from "./components/PlaybookStudio";
 import { AnalysisOverview } from "./components/AnalysisOverview";
@@ -589,7 +589,8 @@ function AnalyzingScreen({ L, lang, progress, docName, playbook }: { L: LFn; lan
   );
 }
 
-function RiskGauge({ score, label }: { score: number; label: string }) {
+function RiskGauge({ score, label, lang }: { score: number; label: string; lang: Language }) {
+  const toBnDigitsIf = (n: number) => (lang === "bn" ? toBnDigits(String(n)) : String(n));
   const r = 40;
   const c = 2 * Math.PI * r;
   return (
@@ -600,7 +601,7 @@ function RiskGauge({ score, label }: { score: number; label: string }) {
       </svg>
       <div className="val">
         <span>
-          <b>{score}</b>
+          <b>{toBnDigitsIf(score)}</b>
           <small>{label}</small>
         </span>
       </div>
@@ -648,7 +649,7 @@ function ResultsWorkspace(props: {
   return (
     <>
       <section className="resultHead">
-        <RiskGauge score={result.overallRiskScore} label={L("RISK", "ঝুঁকি")} />
+        <RiskGauge score={result.overallRiskScore} label={L("RISK", "ঝুঁকি")} lang={lang} />
         <div className="grow">
           <div className="eyebrowW">{riskWord[result.riskLevel] || result.riskLevel}{result.isDemo ? ` · ${L("Demo data", "ডেমো ডেটা")}` : ""}</div>
           <h1>{result.contractTitle}</h1>
@@ -674,7 +675,7 @@ function ResultsWorkspace(props: {
         {tabs.map((t) => (
           <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
             {t.icon} {t.label}
-            {t.count !== undefined && <span className="count">{t.count}</span>}
+            {t.count !== undefined && <span className="count">{lang === "bn" ? toBnDigits(String(t.count)) : t.count}</span>}
           </button>
         ))}
       </nav>

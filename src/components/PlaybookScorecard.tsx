@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, CircleSlash, Info, MapPin, MinusCircle, Ro
 import { PlaybookScoring, RuleStatus } from "../types";
 import { STATUS_FACTOR, scoreOf } from "../utils/scoring";
 import { RULES_BN, TERMS_BN } from "../i18n/dataBn";
+import { useLang } from "../i18n/lang";
 
 interface Props {
   scoring: PlaybookScoring;
@@ -24,6 +25,8 @@ const ORDER: RuleStatus[] = ["Fail", "Not Addressed", "Partial", "Pass", "Not As
 
 export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWeightsChange, lang = "en", locatedIds, onShowInContract }) => {
   const L = (en: string, bn: string) => (lang === "bn" ? bn : en);
+  const { num, sec } = useLang();
+  const pts = (n: number) => num(n.toFixed(1).replace(/\.0$/, ""));
   const [editing, setEditing] = useState(false);
   const score = scoreOf(scoring);
   const changed = scoring.rules.some((r) => r.weight !== r.baseWeight);
@@ -60,24 +63,24 @@ export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWe
 
       <div className="scFormula">
         <div className="scBig">
-          <b>{score}</b>
-          <span>/100</span>
+          <b>{num(score)}</b>
+          <span>/{num(100)}</span>
         </div>
         <div className="scEq">
           <div>
-            <b>{scoring.pointsLost.toFixed(1).replace(/\.0$/, "")}</b> {L("risk points of", "ঝুঁকি পয়েন্ট, মোট")} <b>{scoring.totalWeight}</b>{" "}
+            <b>{pts(scoring.pointsLost)}</b> {L("risk points of", "ঝুঁকি পয়েন্ট, মোট")} <b>{num(scoring.totalWeight)}</b>{" "}
             {L("possible", "সম্ভাব্য")}
           </div>
           <small>
             {L("Each rule adds weight × ", "প্রতিটি নিয়ম যোগ করে ওজন × ")}
-            <span className="tag danger">{L("Fail", "ব্যর্থ")} 1</span> <span className="tag warn">{L("Not addressed", "উল্লেখ নেই")} {STATUS_FACTOR["Not Addressed"]}</span>{" "}
-            <span className="tag warn">{L("Partial", "আংশিক")} {STATUS_FACTOR.Partial}</span> <span className="tag ok">{L("Pass", "উত্তীর্ণ")} 0</span>
+            <span className="tag danger">{L("Fail", "ব্যর্থ")} {num(1)}</span> <span className="tag warn">{L("Not addressed", "উল্লেখ নেই")} {num(STATUS_FACTOR["Not Addressed"])}</span>{" "}
+            <span className="tag warn">{L("Partial", "আংশিক")} {num(STATUS_FACTOR.Partial)}</span> <span className="tag ok">{L("Pass", "উত্তীর্ণ")} {num(0)}</span>
           </small>
         </div>
         <div className="scCounts">
           {counts.map(([s, n]) => (
             <span key={s} className={`tag ${STATUS_META[s].cls}`}>
-              {STATUS_META[s].icon} {n} {L(STATUS_META[s].en, STATUS_META[s].bn)}
+              {STATUS_META[s].icon} {num(n)} {L(STATUS_META[s].en, STATUS_META[s].bn)}
             </span>
           ))}
         </div>
@@ -105,16 +108,17 @@ export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWe
                   </button>
                 )}
                 <span className="scPts" title={`${r.weight} × ${r.status === "Not Assessed" ? "—" : STATUS_FACTOR[r.status]}`}>
-                  {r.status === "Not Assessed" ? "—" : `+${r.pointsLost.toFixed(1).replace(/\.0$/, "")}`} <small>/ {r.weight}</small>
+                  {r.status === "Not Assessed" ? "—" : `+${pts(r.pointsLost)}`} <small>/ {num(r.weight)}</small>
                 </span>
               </div>
               <div className="scBar"><i style={{ width: `${(100 * r.pointsLost) / maxLost}%` }} /></div>
               <p className="scWhy">
-                <span className="text-faint">{(lang === "bn" && TERMS_BN[r.category]) || r.category} · {r.clauseRef}</span> — {r.explanation}
+                <span className="text-faint">{(lang === "bn" && TERMS_BN[r.category]) || r.category} · {sec(r.clauseRef)}</span> — {r.explanation}
               </p>
               {r.evidence && (
                 <blockquote className="scQuote">
                   “{r.evidence}”
+                  {lang === "bn" && r.evidenceBn && <span className="scMeaning"><b>সহজ বাংলায়: </b>{r.evidenceBn}</span>}
                   {r.verified === true && <span className="tag ok"><CheckCircle2 size={11} /> {L("Verified in contract", "চুক্তিতে যাচাইকৃত")}</span>}
                   {r.verified === false && <span className="tag warn"><AlertTriangle size={11} /> {L("Quote not found verbatim", "হুবহু উদ্ধৃতি পাওয়া যায়নি")}</span>}
                 </blockquote>
@@ -131,8 +135,8 @@ export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWe
                     onChange={(e) => onWeightsChange({ ...weights, [r.ruleId]: Number(e.target.value) })}
                     aria-label={`Weight for ${r.ruleId}`}
                   />
-                  <b>{r.weight}</b>
-                  {r.weight !== r.baseWeight && <small className="text-faint">({L("playbook", "প্লেবুক")}: {r.baseWeight})</small>}
+                  <b>{num(r.weight)}</b>
+                  {r.weight !== r.baseWeight && <small className="text-faint">({L("playbook", "প্লেবুক")}: {num(r.baseWeight)})</small>}
                 </label>
               )}
             </div>

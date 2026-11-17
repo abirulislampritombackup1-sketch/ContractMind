@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FileEdit, FileText, ListOrdered, MapPin, Scale, SearchX } from "lucide-react";
 import { Finding, FindingKind, Tone } from "../utils/findings";
 import { RULES_BN, TERMS_BN } from "../i18n/dataBn";
+import { toBnDigits } from "../i18n/lang";
 
 interface Props {
   text: string;
@@ -97,7 +98,7 @@ export const ContractView: React.FC<Props> = ({ text, findings, selectedId, onSe
     chunk.split(/(\n?\[Page \d+\]\n?)/).map((part, i) => {
       const m = part.match(/\[Page (\d+)\]/);
       return m ? (
-        <span key={`${key}-${i}`} className="pageMark">{L("Page", "পৃষ্ঠা")} {m[1]}</span>
+        <span key={`${key}-${i}`} className="pageMark">{L("Page", "পৃষ্ঠা")} {lang === "bn" ? toBnDigits(m[1]) : m[1]}</span>
       ) : (
         <React.Fragment key={`${key}-${i}`}>{part}</React.Fragment>
       );
@@ -136,7 +137,7 @@ export const ContractView: React.FC<Props> = ({ text, findings, selectedId, onSe
               <button key={f.id} data-item={f.id} className={`cvItem ${f.tone} ${sel ? "sel" : ""}`} onClick={() => onSelect(sel ? null : f.id)}>
                 <div className="cvItemTop">
                   <span className="cvKind">{KIND_META[f.kind].icon} {L(KIND_META[f.kind].en, KIND_META[f.kind].bn)}</span>
-                  <span className="cvRef">{f.ref === "Missing" ? L("Missing", "অনুপস্থিত") : f.ref}</span>
+                  <span className="cvRef">{f.ref === "Missing" ? L("Missing", "অনুপস্থিত") : lang === "bn" ? toBnDigits(f.ref.replace(/\b(Section|Clause|Article|SECTION|ARTICLE|§)\s*/g, "ধারা ")) : f.ref}</span>
                   {f.start === undefined ? (
                     <span className="tag neutral"><SearchX size={11} /> {f.ref === "Missing" ? L("Missing", "অনুপস্থিত") : L("Not located", "পাওয়া যায়নি")}</span>
                   ) : (

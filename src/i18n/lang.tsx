@@ -23,6 +23,16 @@ export function useLang() {
     const v = value ?? "";
     return bn ? TERMS_BN[v] ?? v : v;
   };
-  return { lang, bn, L, term };
+  /** Western digits → Bangla digits in Bangla mode. */
+  const num = (value: string | number) => (bn ? toBnDigits(String(value)) : String(value));
+  /** Clause reference: "Section 5.2" → "ধারা ৫.২" in Bangla mode. */
+  const sec = (ref: string | undefined | null) => {
+    const v = ref ?? "";
+    return bn ? toBnDigits(v.replace(/\b(Section|Sections|Clause|Article|SECTION|ARTICLE|§)\s*/g, "ধারা ").replace(/\bSchedule\b/gi, "তফসিল")) : v;
+  };
+  return { lang, bn, L, term, num, sec };
 }
 
+
+const BN_DIGITS = "০১২৩৪৫৬৭৮৯";
+export const toBnDigits = (s: string) => s.replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);

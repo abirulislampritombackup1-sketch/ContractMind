@@ -45,7 +45,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
   locatedIds,
   onShowInContract,
 }) => {
-  const { L, term, bn } = useLang();
+  const { L, term, bn, sec } = useLang();
   const [docxState, setDocxState] = useState<{ busy: boolean; msg: string; err?: boolean }>({ busy: false, msg: "" });
 
   const handleDownloadDocx = async () => {
@@ -223,7 +223,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-line">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-xs font-bold text-brand bg-brand/15 px-2.5 py-1 rounded-md">
-                      {r.clauseId}
+                      {sec(r.clauseId)}
                     </span>
                     <h3 className="font-bold text-white text-sm">{(bn && r.sectionTitleBn) || r.sectionTitle}</h3>
                     <span

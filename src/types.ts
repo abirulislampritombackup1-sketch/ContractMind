@@ -124,6 +124,7 @@ export type RuleAssessment = {
   status: RuleStatus;
   clauseRef: string;
   evidence: string; // verbatim contract quote ("" when the contract is silent)
+  evidenceBn?: string; // plain-Bangla meaning of the quote (analyses run in Bangla)
   explanation: string;
   verified?: boolean; // evidence quote found in the contract text
   pointsLost: number; // weight × status factor
