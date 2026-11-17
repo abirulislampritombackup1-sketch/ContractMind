@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { AlertTriangle, CheckCircle2, CircleSlash, Info, MapPin, MinusCircle, RotateCcw, Scale, SlidersHorizontal, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleSlash, Info, Lightbulb, MapPin, MinusCircle, RotateCcw, Scale, SlidersHorizontal, XCircle } from "lucide-react";
 import { PlaybookScoring, RuleStatus } from "../types";
 import { STATUS_FACTOR, scoreOf } from "../utils/scoring";
 import { RULES_BN, TERMS_BN } from "../i18n/dataBn";
@@ -122,6 +122,12 @@ export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWe
                   {r.verified === true && <span className="tag ok"><CheckCircle2 size={11} /> {L("Verified in contract", "চুক্তিতে যাচাইকৃত")}</span>}
                   {r.verified === false && <span className="tag warn"><AlertTriangle size={11} /> {L("Quote not found verbatim", "হুবহু উদ্ধৃতি পাওয়া যায়নি")}</span>}
                 </blockquote>
+              )}
+              {r.recommendation && (
+                <div className="scAction">
+                  <Lightbulb size={14} />
+                  <span><b>{L("What to do: ", "করণীয়: ")}</b>{r.recommendation}</span>
+                </div>
               )}
               {editing && (
                 <label className="scSlider">

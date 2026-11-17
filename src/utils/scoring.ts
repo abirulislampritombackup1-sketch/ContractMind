@@ -54,6 +54,7 @@ export function buildScoring(rawAssessments: any[], playbook: Playbook, contract
       evidence: hasQuote ? evidence : "",
       evidenceBn: hasQuote && typeof a?.evidenceBn === "string" && a.evidenceBn.trim() ? a.evidenceBn.trim() : undefined,
       explanation: typeof a?.explanation === "string" ? a.explanation : "The analysis did not assess this rule.",
+      recommendation: status !== "Pass" && typeof a?.recommendation === "string" && a.recommendation.trim() ? a.recommendation.trim() : undefined,
       verified: hasQuote && hay ? !!locateQuote(hay, evidence) : undefined,
       pointsLost: 0,
     };

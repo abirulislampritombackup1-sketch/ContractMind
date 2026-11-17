@@ -149,6 +149,7 @@ const riskSchema = (bn: boolean) => obj({
       evidence: STR,
       ...(bn ? { evidenceBn: STR } : {}),
       explanation: STR,
+      recommendation: STR,
     })
   ),
   keyFacts: arr(obj({ label: STR, value: STR })),
@@ -319,6 +320,7 @@ Score the contract against the selected playbook:
   * evidence: an EXACT verbatim quote (max 200 characters) from the contract supporting the status — copy it character for character. Use "Not found" when the contract is silent.${lang === "bn" ? `
   * evidenceBn: what the evidence quote means, in simple Bengali (বাংলা), one sentence ("" when there is no quote). Keep evidence itself verbatim in the contract's language.` : ""}
   * explanation: one sentence on why.
+  * recommendation: for "Fail", "Partial" or "Not Addressed", one or two sentences on exactly what to do to fix it (what to ask the other side for, or what wording to add or change, matching the playbook's target standard). Use "" for "Pass".
   Where a playbook tolerance conflicts with a rule's target text, the tolerance wins.
 - overallRiskScore: your own 0-100 estimate (100 = critical exposure). The final score is computed from ruleAssessments, so focus on those.
 - summary: 2-4 sentence executive briefing on the deal and the main exposures.

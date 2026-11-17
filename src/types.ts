@@ -125,6 +125,7 @@ export type RuleAssessment = {
   clauseRef: string;
   evidence: string; // verbatim contract quote ("" when the contract is silent)
   evidenceBn?: string; // plain-Bangla meaning of the quote (analyses run in Bangla)
+  recommendation?: string; // AI's suggested fix for a rule that is not passing
   explanation: string;
   verified?: boolean; // evidence quote found in the contract text
   pointsLost: number; // weight × status factor
