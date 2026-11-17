@@ -35,13 +35,12 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import { ContractAnalysisResult, Playbook } from "./types";
 import { DEFAULT_PLAYBOOKS } from "./data/playbooks";
-import { SAMPLE_CONTRACTS, SampleContract } from "./data/sampleContracts";
 import { runContractIntelligence, AgentKey, AgentState } from "./services/gemini";
 import { RAG_CONFIG } from "./rag/config";
 import { indexDocument } from "./rag";
 import { Language } from "./i18n/translations";
 import { LangProvider } from "./i18n/lang";
-import { SAMPLES_BN, playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
+import { playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
 import { PlaybookStudio } from "./components/PlaybookStudio";
 import { AnalysisOverview } from "./components/AnalysisOverview";
 import { RedlineViewer } from "./components/RedlineViewer";
@@ -163,13 +162,6 @@ export default function App() {
     }
   };
 
-  const handleLoadSample = (sample: SampleContract) => {
-    setFile(null);
-    setDocName(sample.name);
-    setContractText(sample.text);
-    setNotice(null);
-  };
-
   const clearDoc = () => {
     setFile(null);
     setDocName("");
@@ -179,7 +171,7 @@ export default function App() {
   // ── Run the multi-agent analysis ───────────────────────────────────────────
   const handleRunAnalysis = async () => {
     if (!hasDoc) {
-      setNotice({ kind: "warn", text: L("Add a contract first — upload a file or pick a sample.", "প্রথমে একটি চুক্তি যোগ করুন — ফাইল আপলোড করুন বা স্যাম্পল বেছে নিন।") });
+      setNotice({ kind: "warn", text: L("Add a contract first — upload a file.", "প্রথমে একটি চুক্তি যোগ করুন — ফাইল আপলোড করুন।") });
       return;
     }
     setView("review");
@@ -344,7 +336,7 @@ export default function App() {
                   <span className={`stepNum ${hasDoc ? "done" : ""}`}>{hasDoc ? <CheckCircle2 size={16} /> : 1}</span>
                   <div>
                     <h2>{L("Add your contract", "আপনার চুক্তি যোগ করুন")}</h2>
-                    <p>{L("Upload a file, or try one of our sample contracts.", "ফাইল আপলোড করুন অথবা একটি স্যাম্পল চুক্তি ব্যবহার করুন।")}</p>
+                    <p>{L("Upload a PDF, Word or text file.", "PDF, Word বা টেক্সট ফাইল আপলোড করুন।")}</p>
                   </div>
                 </div>
 
@@ -366,21 +358,6 @@ export default function App() {
                 ) : (
                   <Drop busy={busyExtracting} onFile={handleExtractFile} L={L} />
                 )}
-
-                <div className="divider">{L("or try a sample", "অথবা স্যাম্পল ব্যবহার করুন")}</div>
-                <div className="samples">
-                  {SAMPLE_CONTRACTS.map((s) => (
-                    <button
-                      key={s.id}
-                      className={`sample ${!file && contractText === s.text ? "on" : ""}`}
-                      onClick={() => handleLoadSample(s)}
-                    >
-                      <span className="tag brand">{lang === "bn" ? s.badge.replace("Dataset", "ডেটাসেট") : s.badge}</span>
-                      <b>{(lang === "bn" && SAMPLES_BN[s.id]?.name) || s.name}</b>
-                      <small>{(lang === "bn" && SAMPLES_BN[s.id]?.type) || s.type}</small>
-                    </button>
-                  ))}
-                </div>
               </section>
 
               {/* Step 2 + 3 */}
