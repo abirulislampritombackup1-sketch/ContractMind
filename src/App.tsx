@@ -4,7 +4,6 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
-  Database,
   FileCheck2,
   FileEdit,
   FileSearch,
@@ -22,7 +21,6 @@ import {
   RotateCcw,
   Scale,
   ShieldCheck,
-  Sliders,
   Sparkles,
   Sun,
   UploadCloud,
@@ -245,12 +243,7 @@ export default function App() {
             <button className={view === "review" ? "on" : ""} onClick={() => setView("review")}>
               <FileSearch size={15} /> <span className="lbl">{L("Review", "পর্যালোচনা")}</span>
             </button>
-            <button className={view === "playbooks" ? "on" : ""} onClick={() => setView("playbooks")}>
-              <Sliders size={15} /> <span className="lbl">{L("Playbooks", "প্লেবুক")}</span>
-            </button>
-            <button className={view === "library" ? "on" : ""} onClick={() => setView("library")}>
-              <Database size={15} /> <span className="lbl">{L("Library", "লাইব্রেরি")}</span>
-            </button>
+            {/* Playbooks and Library pages are hidden from the menu; their views below still work if re-linked. */}
             <button className={view === "land" ? "on" : ""} onClick={() => setView("land")}>
               <Landmark size={15} /> <span className="lbl">{L("Land Guide", "জমি গাইড")}</span>
             </button>
@@ -398,9 +391,6 @@ export default function App() {
                     <h2>{L("Choose a playbook", "একটি প্লেবুক বেছে নিন")}</h2>
                     <p>{L("The rules your contract is scored against.", "যে নিয়মে চুক্তিটি মূল্যায়ন হবে।")}</p>
                   </div>
-                  <button className="linkBtn right" onClick={() => setView("playbooks")}>
-                    <Sliders size={13} /> {L("Customize", "কাস্টমাইজ")}
-                  </button>
                 </div>
 
                 <div className="pbList">
