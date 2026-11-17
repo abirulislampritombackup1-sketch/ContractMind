@@ -15,6 +15,7 @@ export type Finding = {
   kind: FindingKind;
   ref: string; // clause reference shown to the user
   title: string;
+  titleBn?: string; // Bangla title, when the analysis was run in Bangla
   detail: string;
   tone: Tone;
   start?: number; // character range in the contract text (when located)
@@ -74,6 +75,7 @@ export function buildFindings(result: ContractAnalysisResult, text: string): Fin
       kind: "redline",
       ref: r.clauseId,
       title: r.sectionTitle,
+      titleBn: r.sectionTitleBn,
       detail: r.chainOfThought.legalRationale,
       tone: r.severity === "Critical" || r.severity === "High" ? "danger" : r.severity === "Medium" ? "warn" : "info",
       ...(q || s || {}),

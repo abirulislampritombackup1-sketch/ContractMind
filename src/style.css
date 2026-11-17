@@ -532,6 +532,8 @@ footer { text-align: center; color: var(--faint); font-size: 12px; padding: 26px
 .clauseText { font: 14px/1.7 Georgia, 'Times New Roman', 'Noto Sans Bengali', serif; padding: 10px 12px; border-radius: 10px; background: var(--card); }
 .clauseText.del { color: var(--danger); text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: rgb(var(--danger-rgb) / 0.55); }
 .clauseText.ins { color: var(--ok); background: var(--card); }
+.clauseMeaning { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--card); color: var(--text); font-size: 13.5px; line-height: 1.7; }
+.clauseMeaning b { color: var(--muted); font-weight: 700; }
 .insBox { background: rgb(var(--ok-rgb) / 0.07); border: 1px solid rgb(var(--ok-rgb) / 0.25); }
 .insLabel, .insLabel button { color: var(--ok) !important; }
 

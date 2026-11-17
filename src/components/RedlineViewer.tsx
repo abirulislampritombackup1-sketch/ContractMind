@@ -45,7 +45,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
   locatedIds,
   onShowInContract,
 }) => {
-  const { L, term } = useLang();
+  const { L, term, bn } = useLang();
   const [docxState, setDocxState] = useState<{ busy: boolean; msg: string; err?: boolean }>({ busy: false, msg: "" });
 
   const handleDownloadDocx = async () => {
@@ -225,7 +225,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                     <span className="font-mono text-xs font-bold text-brand bg-brand/15 px-2.5 py-1 rounded-md">
                       {r.clauseId}
                     </span>
-                    <h3 className="font-bold text-white text-sm">{r.sectionTitle}</h3>
+                    <h3 className="font-bold text-white text-sm">{(bn && r.sectionTitleBn) || r.sectionTitle}</h3>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         r.severity === "Critical"
@@ -295,6 +295,9 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                     <div className="clauseText del">
                       {r.originalText}
                     </div>
+                    {bn && r.originalTextBn && (
+                      <p className="clauseMeaning"><b>সহজ বাংলায়: </b>{r.originalTextBn}</p>
+                    )}
                   </div>
 
                   {/* Proposed Text (Insertion) */}
@@ -311,6 +314,9 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                     <div className="clauseText ins">
                       {r.proposedText}
                     </div>
+                    {bn && r.proposedTextBn && (
+                      <p className="clauseMeaning"><b>সহজ বাংলায়: </b>{r.proposedTextBn}</p>
+                    )}
                   </div>
                 </div>
 

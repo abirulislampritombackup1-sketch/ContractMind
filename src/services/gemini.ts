@@ -162,7 +162,10 @@ const RISK_SCHEMA = obj({
   ),
 });
 
-const REDLINE_SCHEMA = obj({
+// In Bangla mode the quote and replacement stay in the contract's language (they are
+// located in, and written into, the document), so Bangla versions are added alongside.
+const BN_REDLINE_FIELDS = { sectionTitleBn: STR, originalTextBn: STR, proposedTextBn: STR };
+const redlineSchema = (bn: boolean) => obj({
   redlines: arr(
     obj({
       id: STR,
@@ -170,6 +173,7 @@ const REDLINE_SCHEMA = obj({
       sectionTitle: STR,
       originalText: STR,
       proposedText: STR,
+      ...(bn ? BN_REDLINE_FIELDS : {}),
       action: en("replace", "delete", "insert"),
       severity: en("Critical", "High", "Medium", "Low"),
       chainOfThought: obj({
@@ -322,7 +326,7 @@ Score the contract against the selected playbook:
     {
       key: "redlines",
       label: "Redlines",
-      schema: REDLINE_SCHEMA,
+      schema: redlineSchema(lang === "bn"),
       retrieval: {
         queries: playbook.rules.map((r) => `${r.title}: ${r.unacceptableTerms.join("; ")}`),
         scale: 2.5,
@@ -335,7 +339,12 @@ Produce 4 to 6 redlines for the highest-risk clauses relative to the playbook. F
 - originalText: an EXACT verbatim quote from the contract (max 250 characters) — copy it character for character so it can be located in the document.
 - proposedText: balanced replacement wording that satisfies the playbook.
 - action, severity.
-- chainOfThought: opposingCounselStance (why the clause is one-sided), commercialRiskAssessment (practical business risk), legalRationale (justification for the change), negotiationTalkingPoint (what to say to the other side).`,
+- chainOfThought: opposingCounselStance (why the clause is one-sided), commercialRiskAssessment (practical business risk), legalRationale (justification for the change), negotiationTalkingPoint (what to say to the other side).${
+        lang === "bn"
+          ? `
+- Keep sectionTitle, originalText and proposedText in the contract's original language (they are matched against and inserted into the document). Also give, in simple Bengali (বাংলা): sectionTitleBn (the section title), originalTextBn (what the original clause means, one or two sentences), proposedTextBn (what the proposed wording means, one or two sentences).`
+          : ""
+      }`,
     },
     {
       key: "obligations",
@@ -567,6 +576,9 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
       sectionTitle: safeString(r?.sectionTitle, "Contract Clause"),
       originalText: safeString(r?.originalText, "Original text not captured."),
       proposedText: safeString(r?.proposedText, "Proposed text not generated."),
+      sectionTitleBn: safeString(r?.sectionTitleBn) || undefined,
+      originalTextBn: safeString(r?.originalTextBn) || undefined,
+      proposedTextBn: safeString(r?.proposedTextBn) || undefined,
       action: (["replace", "delete", "insert"].includes(r?.action) ? r.action : "replace") as "replace" | "delete" | "insert",
       severity: (["Critical", "High", "Medium", "Low", "Review"].includes(r?.severity)
         ? r.severity

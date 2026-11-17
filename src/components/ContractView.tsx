@@ -27,6 +27,7 @@ export const ContractView: React.FC<Props> = ({ text, findings, selectedId, onSe
   const L = (en: string, bn: string) => (lang === "bn" ? bn : en);
   const STATUS_BN: Record<string, string> = { ...TERMS_BN, "Not Addressed": "উল্লেখ নেই" };
   const titleOf = (f: Finding) => {
+    if (lang === "bn" && f.titleBn) return f.titleBn;
     if (lang !== "bn" || f.kind !== "rule") return f.title;
     const m = f.title.match(/^(\S+) · (.*) — ([^—]+)$/);
     if (!m) return f.title;

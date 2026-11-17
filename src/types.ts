@@ -42,6 +42,10 @@ export type RedlineItem = {
   sectionTitle: string;
   originalText: string;
   proposedText: string;
+  /** Bangla title and plain-Bangla meaning of the clauses (only for analyses run in Bangla). */
+  sectionTitleBn?: string;
+  originalTextBn?: string;
+  proposedTextBn?: string;
   action: "replace" | "delete" | "insert";
   severity: RiskLevel;
   chainOfThought: {
