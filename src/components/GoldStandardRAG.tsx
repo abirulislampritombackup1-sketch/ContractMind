@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { BenchmarkComparison } from "../types";
+import { BenchmarkComparison, MissingProtection } from "../types";
 import { GOLD_STANDARD_CLAUSES } from "../data/goldStandards";
 import {
   GitCompare,
@@ -16,10 +16,15 @@ import { useLang } from "../i18n/lang";
 
 interface GoldStandardRAGProps {
   comparisons: BenchmarkComparison[];
+  missing?: MissingProtection[];
+  search?: { clauses: number; matched: number; threshold: number };
 }
 
-export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons }) => {
-  const { L } = useLang();
+export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons, missing, search }) => {
+  const { L, num, sec } = useLang();
+  const pct = (n: number) => `${num(Math.round(n * 100))}%`;
+  const gaps = (missing || []).filter((m) => m.status === "missing");
+  const cleared = (missing || []).filter((m) => m.status !== "missing");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleCopyClause = (id: string, text: string) => {
@@ -72,6 +77,55 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
         </div>
       </div>
 
+      {search && (
+        <div className="notice info">
+          <Sparkles size={16} />
+          <span>
+            {L(
+              `Embedding search compared every contract section with ${search.clauses} Gold Standard clauses: ${search.matched} matched (similarity of at least ${Math.round(search.threshold * 100)}%), ${(missing || []).length} required clause(s) had no similar section and were checked for gaps.`,
+              num(`এমবেডিং সার্চ চুক্তির প্রতিটি অংশকে ${search.clauses}টি আদর্শ ধারার সাথে মিলিয়েছে: ${search.matched}টি মিলেছে (অন্তত ${Math.round(search.threshold * 100)}% সাদৃশ্য), ${(missing || []).length}টি প্রয়োজনীয় ধারার মতো কোনো অংশ পাওয়া যায়নি, সেগুলো ঘাটতি হিসেবে যাচাই করা হয়েছে।`)
+            )}
+          </span>
+        </div>
+      )}
+
+      {gaps.length > 0 && (
+        <div className="bg-surface p-6 rounded-2xl border border-line space-y-4">
+          <div>
+            <h3 className="font-bold text-white text-base flex items-center gap-2">
+              <AlertTriangle size={16} className="text-danger" /> {L("Missing protections", "অনুপস্থিত সুরক্ষা")} ({num(gaps.length)})
+            </h3>
+            <p className="text-xs text-muted mt-1">
+              {L("No contract section was similar to these Gold Standard clauses, and the benchmark agent confirmed they are missing. Suggested wording to add:", "এই আদর্শ ধারাগুলোর মতো কোনো অংশ চুক্তিতে নেই, এবং বেঞ্চমার্ক এজেন্ট তা নিশ্চিত করেছে। যোগ করার প্রস্তাবিত লেখা:")}
+            </p>
+          </div>
+          {gaps.map((m) => (
+            <div key={m.goldId} className="missItem">
+              <div className="flex items-center gap-2 flex-wrap justify-between">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="tag danger">{m.category}</span>
+                  <b className="text-white text-sm">{m.title}</b>
+                  <span className="simBadge" title={L("Closest contract section", "সবচেয়ে কাছের অংশ")}>{L("closest", "সর্বোচ্চ মিল")} {pct(m.bestSimilarity)}</span>
+                  {!m.confirmedByAI && <span className="tag neutral">{L("search only", "শুধু সার্চ")}</span>}
+                </div>
+                <button onClick={() => handleCopyClause(m.goldId, m.standardText)} className="text-[11px] text-brand hover:underline flex items-center gap-1">
+                  <Copy size={11} /> {copiedId === m.goldId ? L("Copied!", "কপি হয়েছে!") : L("Copy clause", "ধারা কপি")}
+                </button>
+              </div>
+              {m.evidence && <span className="text-xs text-muted">{m.evidence}</span>}
+              <pre>{m.standardText}</pre>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {cleared.length > 0 && (
+        <div className="text-xs text-muted px-1">
+          {L("Checked and not missing: ", "যাচাই করা হয়েছে, অনুপস্থিত নয়: ")}
+          {cleared.map((m) => `${m.title} (${m.status === "present" ? L("present", "আছে") : L("not needed for this contract", "এই চুক্তিতে প্রযোজ্য নয়")})`).join(" · ")}
+        </div>
+      )}
+
       {/* Comparison Cards */}
       <div className="space-y-6">
         {comparisons.map((c, idx) => {
@@ -90,6 +144,17 @@ export const GoldStandardRAG: React.FC<GoldStandardRAGProps> = ({ comparisons })
                     {c.clauseCategory}
                   </span>
                   <h3 className="font-bold text-white text-base">{c.contractClauseTitle}</h3>
+                  {c.similarity !== undefined && (
+                    <span className="simBadge" title={L("Embedding similarity between this section and the gold clause", "এই অংশ ও আদর্শ ধারার এমবেডিং সাদৃশ্য")}>
+                      {L("similarity", "সাদৃশ্য")} {pct(c.similarity)}
+                    </span>
+                  )}
+                  {c.contractRef && (
+                    <span className="text-[11px] text-faint">
+                      {sec(c.contractRef)}
+                      {c.page ? ` · ${L("p.", "পৃ.")} ${num(c.page)}` : ""}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3">

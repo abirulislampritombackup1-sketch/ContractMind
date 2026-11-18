@@ -26,4 +26,6 @@ export const RAG_CONFIG = {
   summaryBatchChars: num(env.VITE_RAG_SUMMARY_BATCH_CHARS, 12000),
   /** A PDF page with fewer non-space characters than this is flagged as scanned / needing OCR. */
   minPageChars: num(env.VITE_RAG_MIN_PAGE_CHARS, 40),
+  /** Gold Standard RAG: a contract section at least this similar (cosine, 0-1) counts as covering a gold clause. */
+  goldMinSimilarity: num(env.VITE_RAG_GOLD_MIN_SIMILARITY, 0.6),
 };

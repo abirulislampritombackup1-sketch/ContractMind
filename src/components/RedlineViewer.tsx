@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { RedlineItem } from "../types";
+import { OpposingFinding, RedlineItem } from "../types";
 import { generateReconciledDocument, downloadTextFile, downloadJsonFile } from "../utils/diffHelper";
 import {
   FileEdit,
@@ -32,6 +32,8 @@ interface RedlineViewerProps {
   playbookName?: string;
   locatedIds?: Set<string>;
   onShowInContract?: (id: string) => void;
+  /** Opposing Counsel findings the Dealmaker answered with these redlines. */
+  findings?: OpposingFinding[];
 }
 
 export const RedlineViewer: React.FC<RedlineViewerProps> = ({
@@ -44,6 +46,7 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
   playbookName,
   locatedIds,
   onShowInContract,
+  findings,
 }) => {
   const { L, term, bn, sec } = useLang();
   const [docxState, setDocxState] = useState<{ busy: boolean; msg: string; err?: boolean }>({ busy: false, msg: "" });
@@ -140,6 +143,42 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
           {docxState.err ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
           <span>{docxState.msg}</span>
           <button onClick={() => setDocxState({ busy: false, msg: "" })} aria-label={L("Dismiss", "বন্ধ করুন")}><X size={16} /></button>
+        </div>
+      )}
+
+      {findings && findings.length > 0 && (
+        <div className="bg-surface p-5 rounded-2xl border border-line space-y-3">
+          <div>
+            <h3 className="font-bold text-white text-base flex items-center gap-2">
+              <ShieldAlert size={16} className="text-danger" /> {L("Opposing Counsel findings", "প্রতিপক্ষ আইনজীবীর পর্যবেক্ষণ")}
+            </h3>
+            <p className="text-xs text-muted mt-1">
+              {L(
+                "One agent reviewed the contract as the other side's lawyer. A second agent (Commercial Dealmaker) answered each finding with the counter-offers below.",
+                "একটি এজেন্ট অপর পক্ষের আইনজীবী হিসেবে চুক্তিটি দেখেছে। দ্বিতীয় এজেন্ট (বাণিজ্যিক ডিলমেকার) প্রতিটি পর্যবেক্ষণের জবাবে নিচের পাল্টা প্রস্তাব দিয়েছে।"
+              )}
+            </p>
+          </div>
+          <div className="ocList">
+            {findings.map((f) => {
+              const answered = redlines.filter((r) => r.answersFinding?.toUpperCase() === f.id.toUpperCase()).map((r) => r.id);
+              return (
+                <div key={f.id} className="ocItem">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="answersChip">{f.id}</span>
+                    <span className={`tag ${f.severity === "Critical" ? "danger" : f.severity === "High" ? "warn" : "brand"}`}>{term(f.severity)}</span>
+                    <span className="text-faint">{sec(f.clauseRef)}</span>
+                  </div>
+                  <b className="text-white">{f.issue}</b>
+                  {f.quote && <q>{f.quote}</q>}
+                  {f.leverage && <span className="text-muted"><b>{L("Their argument: ", "তাদের যুক্তি: ")}</b>{f.leverage}</span>}
+                  <span className="text-faint">
+                    {answered.length ? L(`Answered by ${answered.join(", ")}`, `জবাব: ${answered.join(", ")}`) : L("No counter-offer yet", "এখনও পাল্টা প্রস্তাব নেই")}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -247,6 +286,11 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
                           <SearchX size={12} /> {L("Not found in text", "টেক্সটে পাওয়া যায়নি")}
                         </span>
                       )
+                    )}
+                    {r.answersFinding && (
+                      <span className="answersChip" title={findings?.find((f) => f.id === r.answersFinding)?.issue}>
+                        <ShieldAlert size={11} /> {L(`Answers ${r.answersFinding}`, `${r.answersFinding}-এর জবাব`)}
+                      </span>
                     )}
                   </div>
 

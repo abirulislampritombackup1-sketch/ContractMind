@@ -3,6 +3,9 @@ import { GOLD_STANDARD_CLAUSES } from "../data/goldStandards";
 import { Language } from "../i18n/translations";
 import { PLAYBOOKS_BN } from "../i18n/dataBn";
 import { documentParts } from "./docParts";
+import { retrieveGold, GoldRetrieval } from "../rag/goldIndex";
+import { labelOf } from "../rag/promptBuilder";
+import { AgentRun, MissingProtection, OpposingFinding } from "../types";
 import { SAMPLE_CONTRACTS } from "../data/sampleContracts";
 import { applyScoring, buildScoring } from "../utils/scoring";
 import { RAG_CONFIG } from "../rag/config";
@@ -137,6 +140,7 @@ const AGENT_LABEL_BN: Record<string, string> = {
   Redlines: "রেডলাইন",
   "Obligations & payment milestones": "বাধ্যবাধকতা ও পেমেন্ট মাইলস্টোন",
   "Gold Standard benchmark comparison": "আদর্শ ধারার তুলনা",
+  "Opposing counsel review": "প্রতিপক্ষ আইনজীবীর পর্যালোচনা",
 };
 
 export async function toBase64(f: File): Promise<string> {
@@ -190,6 +194,20 @@ const riskSchema = (bn: boolean) => obj({
 // In Bangla mode the quote and replacement stay in the contract's language (they are
 // located in, and written into, the document), so Bangla versions are added alongside.
 const BN_REDLINE_FIELDS = { sectionTitleBn: STR, originalTextBn: STR, proposedTextBn: STR };
+
+const OPPOSING_SCHEMA = obj({
+  findings: arr(
+    obj({
+      id: STR,
+      clauseRef: STR,
+      quote: STR,
+      issue: STR,
+      severity: en("Critical", "High", "Medium", "Low"),
+      ruleId: STR,
+      leverage: STR,
+    })
+  ),
+});
 const redlineSchema = (bn: boolean) => obj({
   redlines: arr(
     obj({
@@ -198,6 +216,7 @@ const redlineSchema = (bn: boolean) => obj({
       sectionTitle: STR,
       originalText: STR,
       proposedText: STR,
+      answersFinding: STR,
       ...(bn ? BN_REDLINE_FIELDS : {}),
       action: en("replace", "delete", "insert"),
       severity: en("Critical", "High", "Medium", "Low"),
@@ -240,9 +259,13 @@ const OBLIGATION_SCHEMA = obj({
   ),
 });
 
-const BENCHMARK_SCHEMA = obj({
+const benchmarkSchema = (gold: boolean) => obj({
+  ...(gold
+    ? { missingCheck: arr(obj({ goldId: STR, status: en("missing", "present", "not_applicable"), evidence: STR })) }
+    : {}),
   benchmarkComparisons: arr(
     obj({
+      goldId: STR,
       clauseCategory: STR,
       contractClauseTitle: STR,
       contractClauseText: STR,
@@ -257,7 +280,7 @@ const BENCHMARK_SCHEMA = obj({
 });
 
 type AgentSpec = {
-  key: "risk" | "redlines" | "obligations" | "benchmarks";
+  key: "risk" | "obligations" | "benchmarks" | "opposing" | "redlines";
   label: string; // shown to the user if this section fails
   schema: any;
   context: string; // playbook / gold-standard material this agent needs
@@ -278,7 +301,7 @@ export async function runContractIntelligence(
   playbook: Playbook,
   file?: File,
   lang: Language = "en",
-  onProgress?: (agent: AgentKey, state: AgentState) => void
+  onProgress?: (agent: AgentKey, state: AgentState, run?: AgentRun) => void
 ): Promise<ContractAnalysisResult> {
   const truncatedText = contractText.slice(0, MAX_CHARS);
 
@@ -351,6 +374,23 @@ Score the contract against the selected playbook:
 - agentPerspectives: exactly 3 items — "Opposing Counsel" (predatory clauses and traps the other side relies on), "Commercial Dealmaker" (balanced compromises to close the deal), "Risk Auditor" (specific playbook rule breaches by rule id). 2-4 keyPoints each.`,
     },
     {
+      key: "opposing",
+      label: "Opposing counsel review",
+      schema: OPPOSING_SCHEMA,
+      retrieval: {
+        queries: [
+          "indemnification, hold harmless, defend, third-party claims",
+          ...playbook.rules.map((r) => `${r.title}: ${r.unacceptableTerms.filter((t) => t.trim()).join("; ") || r.targetStandard}`),
+        ],
+        scale: 2.5,
+        perQuery: 1,
+      },
+      context: playbookBlock,
+      task: `You are the OPPOSING COUNSEL agent of ContractMind: think like the lawyer who drafted this contract for the other side.
+Find the 4 to 6 most one-sided, high-risk clauses for our client, judged against the playbook. Always examine indemnification first (unilateral, uncapped or missing indemnities), then liability caps, termination, IP/data rights and payment.
+For each finding: id "OC-1", "OC-2", ...; clauseRef; quote (EXACT verbatim contract text, max 250 characters); issue (why it is one-sided, one or two sentences); severity; ruleId (the playbook rule it breaches, or ""); leverage (what the other side will argue to keep it).`,
+    },
+    {
       key: "redlines",
       label: "Redlines",
       schema: redlineSchema(lang === "bn"),
@@ -360,13 +400,13 @@ Score the contract against the selected playbook:
         perQuery: 1,
       },
       context: `${playbookBlock}\n\n${goldShort}`,
-      task: `You are the OPPOSING-COUNSEL & NEGOTIATOR agent of ContractMind.
-Produce 4 to 6 redlines for the highest-risk clauses relative to the playbook. For each:
-- id "RED-01", "RED-02", ...; clauseId (e.g. "Section 5.1"); sectionTitle.
+      task: `You are the COMMERCIAL DEALMAKER agent of ContractMind. Your job is to close the deal while removing the dangerous terms.
+For each Opposing Counsel finding you are given (if any), write one commercially workable counter-offer as a redline; add others only for remaining high-risk clauses. Produce 4 to 6 redlines. For each:
+- id "RED-01", "RED-02", ...; clauseId (e.g. "Section 5.1"); sectionTitle; answersFinding (the finding id it answers, e.g. "OC-1", or "").
 - originalText: an EXACT verbatim quote from the contract (max 250 characters) — copy it character for character so it can be located in the document.
-- proposedText: balanced replacement wording that satisfies the playbook.
+- proposedText: balanced replacement wording the other side can realistically accept and that satisfies the playbook.
 - action, severity.
-- chainOfThought: opposingCounselStance (why the clause is one-sided), commercialRiskAssessment (practical business risk), legalRationale (justification for the change), negotiationTalkingPoint (what to say to the other side).${
+- chainOfThought: opposingCounselStance (the other side's position, taken from the finding), commercialRiskAssessment (practical business risk), legalRationale (justification for the change), negotiationTalkingPoint (what to say to the other side, including a fallback you could concede).${
         lang === "bn"
           ? `
 - Keep sectionTitle, originalText and proposedText in the contract's original language (they are matched against and inserted into the document). Also give, in simple Bengali (বাংলা): sectionTitleBn (the section title), originalTextBn (what the original clause means, one or two sentences), proposedTextBn (what the proposed wording means, one or two sentences).`
@@ -396,7 +436,7 @@ Produce 4 to 6 redlines for the highest-risk clauses relative to the playbook. F
     {
       key: "benchmarks",
       label: "Gold Standard benchmark comparison",
-      schema: BENCHMARK_SCHEMA,
+      schema: benchmarkSchema(false),
       retrieval: {
         queries: GOLD_STANDARD_CLAUSES.map((g) => `${g.category}: ${g.title}`),
         scale: 2,
@@ -404,7 +444,7 @@ Produce 4 to 6 redlines for the highest-risk clauses relative to the playbook. F
       },
       context: goldFull,
       task: `You are the BENCHMARK (RAG) agent of ContractMind.
-Compare the contract against the Gold Standard clause library above. Produce 3 to 5 benchmarkComparisons for the most important clause categories: quote or summarize the contract clause, name the matching gold standard (title + its id), give matchScore 0-100 (100 = fully aligned), list concrete deviations and missing protections (use an empty array when there are none), and a practical recommendation.`,
+Compare the contract against the Gold Standard clause library above. Produce 3 to 5 benchmarkComparisons for the most important clause categories: goldId (the gold clause id), quote or summarize the contract clause, name the matching gold standard (title), give matchScore 0-100 (100 = fully aligned), list concrete deviations and missing protections (use an empty array when there are none), and a practical recommendation.`,
     },
   ];
 
@@ -431,51 +471,67 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
       (fullDocParts ??= documentParts({ file, text: truncatedText, hasText: hasExtractedText }));
 
     const modelsUsed = new Set<string>();
+    const runs: AgentRun[] = [];
+    const spec = (key: AgentKey) => agents.find((a) => a.key === key)!;
 
-    const runAgent = async (a: AgentSpec): Promise<any> => {
+    type RunOpts = { extraContext?: string; docParts?: any[]; context?: string; task?: string; schema?: any; mode?: AgentRun["mode"]; receivedFrom?: string[]; note?: string; sent?: { n: number; total: number } };
+
+    const runAgent = async (a: AgentSpec, opts: RunOpts = {}): Promise<any> => {
       onProgress?.(a.key, "running");
+      const started = Date.now();
+      const run: AgentRun = { key: a.key, ok: false, ms: 0, mode: opts.mode || "full", receivedFrom: opts.receivedFrom, note: opts.note };
       try {
-        const out = await runAgentInner(a);
-        onProgress?.(a.key, "done");
+        const out = await runAgentInner(a, opts, run);
+        run.ok = true;
         return out;
-      } catch (e) {
-        onProgress?.(a.key, "failed");
-        throw e;
+      } finally {
+        run.ms = Date.now() - started;
+        runs.push(run);
+        onProgress?.(a.key, run.ok ? "done" : "failed", run);
       }
     };
 
-    const runAgentInner = async (a: AgentSpec): Promise<any> => {
-      let docParts: any[] | undefined;
-      let mode: "rag" | "full" = "full";
-      let sent: { n: number; total: number } | undefined;
-      if (index) {
+    const runAgentInner = async (a: AgentSpec, opts: RunOpts, run: AgentRun): Promise<any> => {
+      let docParts: any[] | undefined = opts.docParts;
+      if (docParts) {
+        run.mode = opts.mode || "gold";
+        if (opts.sent) {
+          run.chunksSent = opts.sent.n;
+          run.chunksTotal = opts.sent.total;
+        }
+      } else if (index) {
         try {
           const ctx = await retrieveContext(index, a.retrieval.queries, {
             topK: Math.round(RAG_CONFIG.topK * a.retrieval.scale),
             perQuery: a.retrieval.perQuery,
           });
           docParts = [{ text: `${ctx.block}\n\n${AGENT_RULES}` }];
-          mode = "rag";
-          sent = { n: ctx.chunks.length, total: ctx.totalChunks };
+          run.mode = "rag";
+          run.chunksSent = ctx.chunks.length;
+          run.chunksTotal = ctx.totalChunks;
         } catch (e: any) {
           console.warn(`[ContractMind] Retrieval failed for ${a.key}, sending the whole document: ${e?.message || e}`);
         }
       }
       docParts ??= await getFullDocParts();
-      const instructions = [a.context, langBlock, `=== YOUR TASK ===\n${a.task}`, style].filter(Boolean).join("\n\n");
+      const instructions = [opts.context ?? a.context, opts.extraContext, langBlock, `=== YOUR TASK ===\n${opts.task ?? a.task}`, style]
+        .filter(Boolean)
+        .join("\n\n");
       const { res, model } = await callGemini({
         contents: [{ role: "user", parts: [...docParts, { text: instructions }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: a.schema,
+          responseSchema: opts.schema ?? a.schema,
           temperature: 0.1,
           maxOutputTokens: 8192,
           thinkingConfig: { thinkingLevel: "low" },
         },
       });
+      run.model = model;
       if (!res.ok) throw new Error(await geminiErrorMessage(res, model));
       const data = await res.json();
-      logUsage(a.key, model, data?.usageMetadata, { mode, chunksSent: sent?.n, chunksTotal: sent?.total });
+      run.tokens = data?.usageMetadata?.totalTokenCount;
+      logUsage(a.key, model, data?.usageMetadata, { mode: run.mode === "gold" ? "rag" : run.mode, chunksSent: run.chunksSent, chunksTotal: run.chunksTotal });
       const rawText: string = usageText(data);
       if (!rawText.trim()) throw new Error(M("Gemini returned an empty response.", "Gemini কোনো উত্তর দেয়নি।"));
       try {
@@ -487,21 +543,99 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
       }
     };
 
-    // All four agents run in parallel, so total time ≈ the slowest agent.
-    const settled = await Promise.allSettled(agents.map(runAgent));
+    // ── The pipeline ──────────────────────────────────────────────────────────
+    //   Risk Auditor ──► Opposing Counsel ──► Commercial Dealmaker (redlines)
+    //   Obligation Extractor        (in parallel)
+    //   Gold Standard search ──► Benchmark Agent   (in parallel)
+
+    const riskP = runAgent(spec("risk"));
+    const obligationsP = runAgent(spec("obligations"));
+
+    const opposingP = riskP
+      .catch(() => null)
+      .then((risk) => {
+        const failedRules = (risk?.ruleAssessments || []).filter((r: any) => r?.status && r.status !== "Pass");
+        if (!failedRules.length) return runAgent(spec("opposing"));
+        const block = `=== RISK AUDITOR HAND-OFF: rules this contract does not meet ===\n${failedRules
+          .map((r: any) => {
+            const rule = playbook.rules.find((x) => x.id.toUpperCase() === String(r.ruleId).toUpperCase());
+            return `- ${r.ruleId} ${rule?.title || ""} — ${r.status} (${r.clauseRef || "no clause"}): ${r.explanation || ""}`;
+          })
+          .join("\n")}\nStart from these rules, then add any other one-sided clauses.`;
+        return runAgent(spec("opposing"), { extraContext: block, receivedFrom: ["risk"], note: `${failedRules.length} rule(s)` });
+      });
+
+    const redlinesP = opposingP
+      .catch(() => null)
+      .then((opp) => {
+        const findings: any[] = Array.isArray(opp?.findings) ? opp.findings : [];
+        if (!findings.length) return runAgent(spec("redlines"));
+        const block = `=== OPPOSING COUNSEL HAND-OFF: one-sided clauses to answer ===\n${findings
+          .map((f) => `- ${f.id} [${f.severity}] ${f.clauseRef}: "${f.quote}"\n  Issue: ${f.issue}\n  Their argument: ${f.leverage}`)
+          .join("\n")}`;
+        return runAgent(spec("redlines"), { extraContext: block, receivedFrom: ["opposing"], note: `${findings.length} finding(s)` });
+      });
+
+    let gold: GoldRetrieval | null = null;
+    const benchmarksP = (async () => {
+      if (index) {
+        try {
+          gold = await retrieveGold(index, GOLD_STANDARD_CLAUSES);
+        } catch (e: any) {
+          console.warn(`[ContractMind] Gold Standard search failed, using the whole library: ${e?.message || e}`);
+        }
+      }
+      if (!gold || (!gold.matched.length && !gold.possiblyMissing.length)) return runAgent(spec("benchmarks"));
+      const pct = (n: number) => `${Math.round(n * 100)}%`;
+      const matchedBlock = gold.matched
+        .map(
+          (m) => `[${m.gold.id}] ${m.gold.category} — ${m.gold.title} (similarity ${pct(m.best)})
+Gold text: "${m.gold.standardText}"
+Closest contract sections:
+${m.hits.map((h) => `  ${labelOf(h.chunk)} (similarity ${pct(h.score)})\n  ${h.chunk.text.slice(0, 1200)}`).join("\n")}`
+        )
+        .join("\n\n");
+      const missingBlock = gold.possiblyMissing
+        .map(
+          (m) => `[${m.gold.id}] ${m.gold.category} — ${m.gold.title} (best similarity only ${pct(m.best)})
+Gold text: "${m.gold.standardText.slice(0, 500)}"
+Closest contract section: ${m.hits[0] ? `${labelOf(m.hits[0].chunk)} ${m.hits[0].chunk.text.slice(0, 400)}` : "none"}`
+        )
+        .join("\n\n");
+      const sentChunks = new Set(gold.matched.flatMap((m) => m.hits.map((h) => h.chunk.id)));
+      return runAgent(spec("benchmarks"), {
+        mode: "gold",
+        docParts: [
+          {
+            text: `=== GOLD STANDARD MATCHES (found by embedding search over ${GOLD_STANDARD_CLAUSES.length} gold clauses) ===\n${matchedBlock || "none"}\n\n=== POSSIBLY MISSING PROTECTIONS (no similar contract section found) ===\n${missingBlock || "none"}\n\n${AGENT_RULES}`,
+          },
+        ],
+        context: "",
+        schema: benchmarkSchema(true),
+        sent: { n: sentChunks.size, total: index!.chunks.length },
+        note: `${gold.matched.length} matched · ${gold.possiblyMissing.length} possibly missing`,
+        task: `You are the BENCHMARK (RAG) agent of ContractMind. The gold clauses above were retrieved by similarity search, each with the contract sections closest to it.
+- benchmarkComparisons: one item per matched gold clause (up to 6, strongest matches first). goldId = the gold id in brackets; clauseCategory; contractClauseTitle and contractClauseText (quote or summarize the closest contract section); goldStandardTitle and goldStandardText (the gold clause); matchScore 0-100 (100 = fully aligned); deviations and missingProtections (concrete, empty arrays when none); a practical recommendation.
+- missingCheck: one item per POSSIBLY MISSING gold clause. status "missing" (the contract has no such protection), "present" (it is there after all; evidence = where), or "not_applicable" (this kind of contract does not need it; evidence = why). evidence is one sentence.`,
+      });
+    })();
+
+    const [riskS, obligationsS, opposingS, redlinesS, benchmarksS] = await Promise.allSettled([riskP, obligationsP, opposingP, redlinesP, benchmarksP]);
+    const settledBy: Record<AgentKey, PromiseSettledResult<any>> = { risk: riskS, obligations: obligationsS, opposing: opposingS, redlines: redlinesS, benchmarks: benchmarksS };
     const byKey: Record<string, any> = {};
     const failed: string[] = [];
-    settled.forEach((s, i) => {
-      if (s.status === "fulfilled") byKey[agents[i].key] = s.value;
+    for (const a of agents) {
+      const st = settledBy[a.key];
+      if (st.status === "fulfilled") byKey[a.key] = st.value;
       else {
-        failed.push(M(agents[i].label, AGENT_LABEL_BN[agents[i].label] || agents[i].label));
-        console.warn(`[ContractMind] ${agents[i].label} failed:`, s.reason);
+        failed.push(M(a.label, AGENT_LABEL_BN[a.label] || a.label));
+        console.warn(`[ContractMind] ${a.label} failed:`, st.reason);
       }
-    });
+    }
 
     // Without the risk agent there is no score or summary — treat as a failure.
     if (!byKey.risk) {
-      const reason = settled[0].status === "rejected" ? (settled[0].reason as Error)?.message : "";
+      const reason = riskS.status === "rejected" ? (riskS.reason as Error)?.message : "";
       throw new Error(reason || M("The risk analysis could not be completed.", "ঝুঁকি বিশ্লেষণ সম্পন্ন করা যায়নি।"));
     }
 
@@ -516,8 +650,15 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
     if (scoring.rules.some((r) => r.status !== "Not Assessed")) {
       result = applyScoring(result, scoring);
     }
+
+    const g = gold as GoldRetrieval | null;
     return {
       ...result,
+      benchmarkComparisons: g ? enrichComparisons(result.benchmarkComparisons, g) : result.benchmarkComparisons,
+      missingProtections: g ? missingFrom(g, byKey.benchmarks?.missingCheck) : undefined,
+      goldSearch: g ? { clauses: GOLD_STANDARD_CLAUSES.length, matched: g.matched.length, threshold: RAG_CONFIG.goldMinSimilarity } : undefined,
+      opposingFindings: sanitizeFindings(byKey.opposing?.findings),
+      agentRuns: runs,
       incompleteSections: failed.length ? failed : undefined,
       modelsUsed: [...modelsUsed],
     };
@@ -601,6 +742,7 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
       sectionTitle: safeString(r?.sectionTitle, "Contract Clause"),
       originalText: safeString(r?.originalText, "Original text not captured."),
       proposedText: safeString(r?.proposedText, "Proposed text not generated."),
+      answersFinding: safeString(r?.answersFinding) || undefined,
       sectionTitleBn: safeString(r?.sectionTitleBn) || undefined,
       originalTextBn: safeString(r?.originalTextBn) || undefined,
       proposedTextBn: safeString(r?.proposedTextBn) || undefined,
@@ -655,6 +797,7 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
     })),
 
     benchmarkComparisons: safeArray(p.benchmarkComparisons).map((b: any) => ({
+      goldId: safeString(b?.goldId) || undefined,
       clauseCategory: safeString(b?.clauseCategory, "General"),
       contractClauseTitle: safeString(b?.contractClauseTitle, "Contract clause"),
       contractClauseText: safeString(b?.contractClauseText, "Not captured."),
@@ -666,6 +809,52 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
       recommendation: safeString(b?.recommendation, "Review recommended."),
     })),
   };
+}
+
+// ── Pipeline helpers ─────────────────────────────────────────────────────────
+
+/** Adds similarity, section and page from the Gold Standard search to each comparison. */
+export function enrichComparisons(list: ContractAnalysisResult["benchmarkComparisons"], gold: GoldRetrieval) {
+  return list.map((c) => {
+    const m = gold.matched.find((x) => x.gold.id === c.goldId) || gold.matched.find((x) => x.gold.title === c.goldStandardTitle);
+    const hit = m?.hits[0];
+    return m
+      ? { ...c, goldId: m.gold.id, similarity: m.best, contractRef: hit ? [hit.chunk.id, hit.chunk.headingPath].filter(Boolean).join(" · ") : undefined, page: hit?.chunk.page || undefined }
+      : c;
+  });
+}
+
+/** Missing protections: required gold clauses the search could not find, as confirmed by the agent. */
+export function missingFrom(gold: GoldRetrieval, checks: any): MissingProtection[] {
+  const list: any[] = Array.isArray(checks) ? checks : [];
+  return gold.possiblyMissing.map((m) => {
+    const c = list.find((x) => String(x?.goldId).toUpperCase() === m.gold.id.toUpperCase());
+    const status = ["missing", "present", "not_applicable"].includes(c?.status) ? c.status : "missing";
+    return {
+      goldId: m.gold.id,
+      category: m.gold.category,
+      title: m.gold.title,
+      standardText: m.gold.standardText,
+      bestSimilarity: m.best,
+      status,
+      evidence: typeof c?.evidence === "string" ? c.evidence : "",
+      confirmedByAI: !!c,
+    };
+  });
+}
+
+function sanitizeFindings(raw: any): OpposingFinding[] | undefined {
+  if (!Array.isArray(raw) || !raw.length) return undefined;
+  const sev = ["Critical", "High", "Medium", "Low"];
+  return raw.map((f: any, i: number) => ({
+    id: typeof f?.id === "string" && f.id ? f.id : `OC-${i + 1}`,
+    clauseRef: typeof f?.clauseRef === "string" ? f.clauseRef : "",
+    quote: typeof f?.quote === "string" ? f.quote : "",
+    issue: typeof f?.issue === "string" ? f.issue : "",
+    severity: sev.includes(f?.severity) ? f.severity : "Medium",
+    ruleId: typeof f?.ruleId === "string" ? f.ruleId : "",
+    leverage: typeof f?.leverage === "string" ? f.leverage : "",
+  }));
 }
 
 /** Chat answer built from retrieved excerpts, or from a chunk-by-chunk summary for whole-document asks. */

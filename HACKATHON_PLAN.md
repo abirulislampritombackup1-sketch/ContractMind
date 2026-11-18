@@ -88,6 +88,8 @@ Every item in the brief, where ContractMind stands today, and the step that fini
 
 ## Phase 3: A real multi-agent workflow and Gold Standard RAG (about 2 days)
 
+> **Status:** built (steps 3.1 and 3.2). Calibrate `VITE_RAG_GOLD_MIN_SIMILARITY` once with a real key (see the note in the README).
+
 ### 3.1 Agents that hand off to each other (E1, R7)
 - **Files:** `src/services/gemini.ts` (`runContractIntelligence`), `src/App.tsx` (`AnalyzingScreen`).
 - Change from four independent agents to a pipeline:

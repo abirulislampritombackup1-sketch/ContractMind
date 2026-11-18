@@ -23,6 +23,30 @@ pnpm build
 
 On Vercel, set `GEMINI_API_KEY` in the project's environment variables (the `/api/gemini` function attaches it).
 
+## Agent pipeline
+
+Five Gemini agents work on each analysis (`runContractIntelligence` in `src/services/gemini.ts`):
+
+```
+Risk Auditor ──► Opposing Counsel ──► Commercial Dealmaker (redlines)
+Obligation Extractor                         (in parallel)
+Gold Standard search ──► Benchmark Agent     (in parallel)
+```
+
+- **Risk Auditor** scores every playbook rule. Its failed, partial and missing rules are handed to **Opposing Counsel**.
+- **Opposing Counsel** reviews the contract as the other side's lawyer, indemnification first, and lists one-sided clauses (`OC-1`, `OC-2`, ...) with the other side's argument.
+- **Commercial Dealmaker** answers each finding with a commercially workable counter-offer; every redline names the finding it answers.
+- If an earlier agent fails, the next one still runs without the hand-off.
+- The analysing screen shows the pipeline live, and the Overview tab shows each agent's model, time, tokens and how many contract sections it read.
+
+## Gold Standard RAG
+
+- `src/data/goldStandards.ts` + `goldStandardsMore.ts`: 30 gold clauses, one per common CUAD v1 category (indemnity, liability cap, termination, confidentiality, governing law, assignment, change of control, non-compete, renewal, price changes, audit, warranties, SLA, insurance, GDPR processing and transfers, exit, and more). The wording is ContractMind's own balanced drafting of common market positions, labelled as such.
+- `src/rag/goldIndex.ts` embeds the library once (cached in IndexedDB) and compares every gold clause with every contract section by cosine similarity.
+- Gold clauses with a similar section (at least `VITE_RAG_GOLD_MIN_SIMILARITY`, default 0.6) are sent to the Benchmark Agent together with their closest sections, instead of the whole library.
+- **Required** gold clauses with no similar section are flagged in code as possibly missing; the agent then confirms each as missing, present or not applicable. The Benchmarks tab lists confirmed missing protections with the gold wording to copy, and shows similarity, section and page for each comparison.
+- Without an index (scanned PDF, RAG off) the agent falls back to the full library in the prompt.
+
 ## Custom playbooks and the risk report
 
 - **Playbooks** page: duplicate a built-in playbook or start a new one, then edit its name, tolerances and rules (category, title, target standard, acceptable fallback, unacceptable terms, severity, weight). Changes save automatically in the browser (`localStorage`). Built-in playbooks stay read-only.
@@ -86,6 +110,7 @@ All optional, read at build/dev start (client-visible, so they need the `VITE_` 
 | `VITE_RAG_SUMMARY_BATCH_CHARS` | `12000` | Characters per group in chunk-by-chunk summaries. |
 | `VITE_RAG_MIN_PAGE_CHARS` | `40` | Pages with fewer characters are flagged as scanned. |
 | `VITE_GEMINI_MAX_CONCURRENT` | `3` | Most Gemini requests running at once (protects the free-tier rate limit). |
+| `VITE_RAG_GOLD_MIN_SIMILARITY` | `0.6` | Similarity (0-1) at which a contract section counts as covering a Gold Standard clause. |
 | `VITE_SHOW_LEGAL_BD` | `true` | `false` hides the Land Guide and Case Helper tabs. |
 
 Changing the embedding model, dimension, chunk size or overlap re-indexes documents automatically (they are part of the cache key).
@@ -95,4 +120,5 @@ Changing the embedding model, dimension, chunk size or overlap re-indexes docume
 - Scanned PDFs (no extractable text) are read by Gemini directly. Files up to about 2.4 MB are sent as they are; larger ones are rendered to page images with pdf.js and shrunk to fit Vercel's 4.5 MB request limit (up to 60 pages; if pages still do not fit, only the first ones are sent and the AI is told). OCR-based indexing is not implemented.
 - Finished analyses are saved in the browser (IndexedDB) by document, playbook and language, so the same analysis opens instantly. **Re-run** always asks the AI again. Demo and incomplete results are not saved.
 - The index lives in the user's browser (IndexedDB); clearing site data re-indexes on next use.
+- The Gold Standard similarity threshold (0.6) has not yet been calibrated on real `gemini-embedding-001` vectors. Run one analysis with a key and check the Benchmarks tab: if clauses that are clearly in the contract are listed as possibly missing, lower `VITE_RAG_GOLD_MIN_SIMILARITY`; if almost nothing is checked for gaps, raise it. The agent's confirmation step limits the damage either way.
 - Retrieval can miss a clause that does not resemble any query. Raise `VITE_RAG_TOP_K` if analyses report provisions as "Not Addressed" that exist in the document.

@@ -733,3 +733,29 @@ button.danger { color: var(--danger); }
 }
 
 .scSummary { margin: 0 0 14px; padding: 9px 12px; border-radius: 10px; background: var(--sunken); font-size: 13px; font-weight: 600; color: var(--text); }
+
+/* ---------- Agent pipeline ---------- */
+.pipeline { display: flex; flex-direction: column; gap: 16px; }
+.apLane { display: flex; flex-direction: column; gap: 8px; }
+.apLaneLabel { font-size: 11.5px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--faint); }
+.apChain { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.apParallel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.apArrow { align-self: center; color: var(--brand); }
+.apTop { display: flex; gap: 10px; align-items: flex-start; }
+.apHandoff { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--brand); background: rgb(var(--brand-rgb) / 0.08); border-radius: 999px; padding: 2px 8px; width: fit-content; }
+.apMetrics { font-size: 11px; color: var(--faint); line-height: 1.5; }
+@media (max-width: 900px) {
+  .apChain { grid-template-columns: 1fr; }
+  .apArrow { transform: rotate(90deg); justify-self: center; }
+  .apParallel { grid-template-columns: 1fr; }
+}
+
+/* ---------- Opposing counsel findings & Gold Standard RAG ---------- */
+.ocList { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.ocItem { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--card-2); display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.55; }
+.ocItem q { font-style: italic; color: var(--muted); }
+.answersChip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgb(var(--danger-rgb) / 0.08); color: var(--danger); }
+.simBadge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgb(var(--brand-rgb) / 0.1); color: var(--brand); }
+.missItem { border: 1px solid rgb(var(--danger-rgb) / 0.3); background: rgb(var(--danger-rgb) / 0.05); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.missItem.present, .missItem.not_applicable { border-color: var(--line); background: var(--card-2); }
+.missItem pre { white-space: pre-wrap; margin: 0; font: 12.5px/1.6 Georgia, 'Times New Roman', 'Noto Sans Bengali', serif; color: var(--text); background: var(--card); border-radius: 10px; padding: 10px 12px; }

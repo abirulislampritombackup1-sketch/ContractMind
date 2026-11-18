@@ -54,6 +54,7 @@ export type RedlineItem = {
     legalRationale: string;
     negotiationTalkingPoint: string;
   };
+  answersFinding?: string; // Opposing Counsel finding id this redline answers ("OC-1")
   accepted?: boolean | null; // null = pending, true = accepted, false = rejected
   page?: string;
 };
@@ -88,7 +89,10 @@ export type GoldStandardClause = {
   title: string;
   standardText: string;
   rationale: string;
-  marketSource: string; // e.g. "ABA Model Contract", "NVCA Model Docs", "EDGAR Tier-1"
+  marketSource: string; // where the position comes from (described honestly, not a quotation)
+  cuadCategory?: string; // matching CUAD v1 clause category, when there is one
+  required?: boolean; // most commercial contracts should contain this protection
+  jurisdiction?: string; // e.g. "EU / UK" for GDPR clauses
 };
 
 export type BenchmarkComparison = {
@@ -101,6 +105,47 @@ export type BenchmarkComparison = {
   deviations: string[];
   missingProtections: string[];
   recommendation: string;
+  goldId?: string; // gold clause id (Gold Standard RAG)
+  similarity?: number; // 0-1 cosine similarity between the gold clause and the contract section
+  contractRef?: string; // contract section the comparison is based on, e.g. "C12 · Payment Terms"
+  page?: number; // page of that section
+};
+
+/** A one-sided clause found by the Opposing Counsel agent (handed to the Dealmaker). */
+export type OpposingFinding = {
+  id: string; // "OC-1"
+  clauseRef: string;
+  quote: string; // verbatim contract text
+  issue: string; // why it is one-sided
+  severity: "Critical" | "High" | "Medium" | "Low";
+  ruleId: string; // playbook rule it breaches, or ""
+  leverage: string; // what the other side will argue
+};
+
+/** A protection the Gold Standard library expects but the contract may lack. */
+export type MissingProtection = {
+  goldId: string;
+  category: string;
+  title: string;
+  standardText: string;
+  bestSimilarity: number; // closest contract section, 0-1
+  status: "missing" | "present" | "not_applicable";
+  evidence: string; // AI's reason, or the clause it found
+  confirmedByAI: boolean; // false when only the similarity search decided
+};
+
+/** What one agent did in the pipeline (shown on screen). */
+export type AgentRun = {
+  key: string;
+  ok: boolean;
+  model?: string;
+  ms: number;
+  tokens?: number;
+  mode: "rag" | "full" | "gold";
+  chunksSent?: number;
+  chunksTotal?: number;
+  receivedFrom?: string[]; // agents whose output this agent received
+  note?: string;
 };
 
 export type AgentPerspective = {
@@ -155,6 +200,10 @@ export type ContractAnalysisResult = {
   isDemo?: boolean; // true = canned offline analysis of a bundled sample, not a live AI result
   incompleteSections?: string[]; // agent sections that failed (others still returned)
   modelsUsed?: string[]; // Gemini models that produced this result (shows fallback use)
+  opposingFindings?: OpposingFinding[];
+  missingProtections?: MissingProtection[];
+  agentRuns?: AgentRun[];
+  goldSearch?: { clauses: number; matched: number; threshold: number }; // Gold Standard RAG stats
 };
 
 export type RepositoryContract = {

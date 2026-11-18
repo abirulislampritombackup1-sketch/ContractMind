@@ -36,7 +36,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import mammoth from "mammoth";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
-import { ContractAnalysisResult, Playbook } from "./types";
+import { AgentRun, ContractAnalysisResult, Playbook } from "./types";
 import { DEFAULT_PLAYBOOKS } from "./data/playbooks";
 import { SAMPLE_CONTRACTS, SampleContract } from "./data/sampleContracts";
 import { runContractIntelligence, AgentKey, AgentState } from "./services/gemini";
@@ -59,6 +59,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PlaybookScorecard } from "./components/PlaybookScorecard";
 import { applyScoring, rescore } from "./utils/scoring";
 import { ContractView } from "./components/ContractView";
+import { AgentPipeline, AgentRunsCard, PIPELINE_ORDER } from "./components/AgentPipeline";
 import { buildFindings, findingId } from "./utils/findings";
 import LandGuide from "./components/legal/LandGuide";
 import CaseHelper from "./components/legal/CaseHelper";
@@ -74,8 +75,7 @@ type ResultTab = "Analysis" | "Contract" | "Redlines" | "Obligations" | "Gold St
 type Notice = { text: string; kind: "info" | "ok" | "warn" | "error" } | null;
 type Progress = Record<AgentKey, AgentState | "waiting">;
 
-const AGENT_ORDER: AgentKey[] = ["risk", "redlines", "obligations", "benchmarks"];
-const IDLE_PROGRESS: Progress = { risk: "waiting", redlines: "waiting", obligations: "waiting", benchmarks: "waiting" };
+const IDLE_PROGRESS: Progress = { risk: "waiting", opposing: "waiting", redlines: "waiting", obligations: "waiting", benchmarks: "waiting" };
 
 const store = {
   get(k: string) {
@@ -110,6 +110,7 @@ export default function App() {
   useEffect(() => store.set("cm-playbook", currentPlaybook.id), [currentPlaybook.id]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState<Progress>(IDLE_PROGRESS);
+  const [runs, setRuns] = useState<Partial<Record<AgentKey, AgentRun>>>({});
   const [analysisResult, setAnalysisResult] = useState<ContractAnalysisResult | null>(null);
   // The exact text/file the current results came from (kept even after "New review" clears the input).
   const [analyzed, setAnalyzed] = useState<{ text: string; file: File | null; name: string }>({ text: "", file: null, name: "" });
@@ -207,15 +208,17 @@ export default function App() {
     setIsAnalyzing(true);
     setNotice(null);
     setProgress(IDLE_PROGRESS);
+    setRuns({});
     window.scrollTo({ top: 0, behavior: "smooth" });
     try {
       const key = await analysisKey({ file, text: contractText, playbook: currentPlaybook, lang }).catch(() => "");
       const cached = !force && key ? await getCachedAnalysis(key) : null;
       const result =
         cached ??
-        (await runContractIntelligence(contractText, currentPlaybook, file || undefined, lang, (agent, state) =>
-          setProgress((p) => ({ ...p, [agent]: state }))
-        ));
+        (await runContractIntelligence(contractText, currentPlaybook, file || undefined, lang, (agent, state, run) => {
+          setProgress((p) => ({ ...p, [agent]: state }));
+          if (run) setRuns((r) => ({ ...r, [agent]: run }));
+        }));
       if (!cached && key) saveAnalysis(key, result);
       setAnalysisResult(result);
       setAnalyzed({ text: contractText, file, name: docName });
@@ -317,7 +320,7 @@ export default function App() {
 
         {/* ───────────── REVIEW ───────────── */}
         {view === "review" && isAnalyzing && (
-          <AnalyzingScreen L={L} lang={lang} progress={progress} docName={docName} playbook={pbName(currentPlaybook)} />
+          <AnalyzingScreen L={L} lang={lang} progress={progress} runs={runs} docName={docName} playbook={pbName(currentPlaybook)} />
         )}
 
         {view === "review" && !isAnalyzing && showResults && analysisResult && (
@@ -604,20 +607,13 @@ function Drop({ busy, onFile, L }: { busy: boolean; onFile: (f: File) => void; L
   );
 }
 
-const AGENT_INFO: Record<AgentKey, { icon: React.ReactNode; en: [string, string]; bn: [string, string] }> = {
-  risk: { icon: <ShieldCheck size={19} />, en: ["Risk Auditor", "Scores the contract against your playbook"], bn: ["ঝুঁকি নিরীক্ষক", "প্লেবুক অনুযায়ী ঝুঁকি স্কোর করে"] },
-  redlines: { icon: <FileEdit size={19} />, en: ["Opposing Counsel", "Finds one-sided clauses and drafts redlines"], bn: ["প্রতিপক্ষ আইনজীবী", "একতরফা ধারা খুঁজে রেডলাইন তৈরি করে"] },
-  obligations: { icon: <ListOrdered size={19} />, en: ["Obligation Extractor", "Lists duties, deadlines and payments"], bn: ["বাধ্যবাধকতা সংগ্রাহক", "দায়িত্ব, সময়সীমা ও পেমেন্ট তালিকা করে"] },
-  benchmarks: { icon: <GitCompare size={19} />, en: ["Benchmark Agent", "Compares clauses to gold standards"], bn: ["বেঞ্চমার্ক এজেন্ট", "আদর্শ ধারার সাথে তুলনা করে"] },
-};
-
-function AnalyzingScreen({ L, lang, progress, docName, playbook }: { L: LFn; lang: Language; progress: Progress; docName: string; playbook: string }) {
-  const done = AGENT_ORDER.filter((k) => progress[k] === "done").length;
+function AnalyzingScreen({ L, lang, progress, runs, docName, playbook }: { L: LFn; lang: Language; progress: Progress; runs: Partial<Record<AgentKey, AgentRun>>; docName: string; playbook: string }) {
+  const done = PIPELINE_ORDER.filter((k) => progress[k] === "done").length;
   return (
-    <section style={{ maxWidth: 980, margin: "10px auto 0" }}>
+    <section style={{ maxWidth: 1080, margin: "10px auto 0" }}>
       <div className="text-center" style={{ marginBottom: 26 }}>
         <div className="heroBadge" style={{ marginBottom: 14 }}>
-          <span>{done}/4</span> {L("agents finished", "এজেন্ট সম্পন্ন")}
+          <span>{lang === "bn" ? toBnDigits(`${done}/${PIPELINE_ORDER.length}`) : `${done}/${PIPELINE_ORDER.length}`}</span> {L("agents finished", "এজেন্ট সম্পন্ন")}
         </div>
         <h1 style={{ font: "800 30px/1.2 'Plus Jakarta Sans', 'Noto Sans Bengali', sans-serif", letterSpacing: "-0.8px", margin: "0 0 8px" }}>
           {L("Analyzing your contract…", "আপনার চুক্তি বিশ্লেষণ করা হচ্ছে…")}
@@ -626,27 +622,7 @@ function AnalyzingScreen({ L, lang, progress, docName, playbook }: { L: LFn; lan
           <b className="text-white">{docName || L("Contract", "চুক্তি")}</b> · {playbook}
         </p>
       </div>
-      <div className="agents">
-        {AGENT_ORDER.map((k) => {
-          const st = progress[k];
-          const info = AGENT_INFO[k];
-          const [name, desc] = lang === "bn" ? info.bn : info.en;
-          return (
-            <div key={k} className={`agent ${st}`}>
-              <div className="agentIcon">{info.icon}</div>
-              <div>
-                <b>{name}</b>
-                <p>{desc}</p>
-              </div>
-              <div className="bar"><i /></div>
-              <div className="agentState" style={{ color: st === "done" ? "var(--ok)" : st === "failed" ? "var(--danger)" : "var(--muted)" }}>
-                {st === "done" ? <CheckCircle2 size={14} /> : st === "failed" ? <XCircle size={14} /> : <span className="spinner dark" style={{ width: 13, height: 13, borderWidth: 2 }} />}
-                {st === "done" ? L("Done", "সম্পন্ন") : st === "failed" ? L("Failed", "ব্যর্থ") : st === "running" ? L("Working…", "কাজ চলছে…") : L("Starting…", "শুরু হচ্ছে…")}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <AgentPipeline states={progress} runs={runs} />
     </section>
   );
 }
@@ -768,6 +744,7 @@ function ResultsWorkspace(props: {
             }
           />
         )}
+        {tab === "Analysis" && <AgentRunsCard runs={result.agentRuns} />}
         {tab === "Contract" && (
           <ContractView text={props.contractText} findings={findings} selectedId={selectedFinding} onSelect={setSelectedFinding} lang={lang} />
         )}
@@ -775,16 +752,16 @@ function ResultsWorkspace(props: {
           props.contractText.startsWith("[Scanned PDF") ? (
             <>
               <div className="notice info"><FileText size={18} /><span>{L("This PDF is scanned, so the clean document export is based on the AI's quotes only.", "এই PDF স্ক্যান করা, তাই ক্লিন ডকুমেন্ট এক্সপোর্ট শুধুমাত্র এআই-এর উদ্ধৃতির উপর ভিত্তি করে।")}</span></div>
-              <RedlineViewer originalText={props.contractText} redlines={result.redlines} onUpdateRedline={props.onUpdateRedline} onAcceptAll={props.onAcceptAll} onRejectAll={props.onRejectAll} contractTitle={result.contractTitle} playbookName={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.redline(id))} />
+              <RedlineViewer originalText={props.contractText} redlines={result.redlines} onUpdateRedline={props.onUpdateRedline} onAcceptAll={props.onAcceptAll} onRejectAll={props.onRejectAll} contractTitle={result.contractTitle} playbookName={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.redline(id))} findings={result.opposingFindings} />
             </>
           ) : (
-            <RedlineViewer originalText={props.contractText} redlines={result.redlines} onUpdateRedline={props.onUpdateRedline} onAcceptAll={props.onAcceptAll} onRejectAll={props.onRejectAll} contractTitle={result.contractTitle} playbookName={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.redline(id))} />
+            <RedlineViewer originalText={props.contractText} redlines={result.redlines} onUpdateRedline={props.onUpdateRedline} onAcceptAll={props.onAcceptAll} onRejectAll={props.onRejectAll} contractTitle={result.contractTitle} playbookName={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.redline(id))} findings={result.opposingFindings} />
           )
         )}
         {tab === "Obligations" && (
           <ObligationsView obligations={result.obligations} paymentMilestones={result.paymentMilestones} contractTitle={result.contractTitle} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.obligation(id))} />
         )}
-        {tab === "Gold Standard" && <GoldStandardRAG comparisons={result.benchmarkComparisons} />}
+        {tab === "Gold Standard" && <GoldStandardRAG comparisons={result.benchmarkComparisons} missing={result.missingProtections} search={result.goldSearch} />}
         {tab === "AI Counsel Chat" && (
           <CounselChat contractText={props.contractText || result.summary} file={props.file || undefined} lang={lang} />
         )}
