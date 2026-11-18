@@ -81,6 +81,12 @@ export type PaymentMilestone = {
   deliverable: string;
   responsibleParty: string;
   status: "Pending" | "Scheduled" | "Conditional";
+  phase?: string; // parent row in a nested table, e.g. "Phase 1 - Implementation"
+  dueDate?: string; // ISO date when the contract states one
+  offsetDays?: number; // days after offsetFrom, when the trigger is relative
+  offsetFrom?: "effective_date" | "previous_milestone" | "acceptance" | "invoice" | "other";
+  page?: number;
+  source?: "text" | "table-image" | "both"; // where the row was read from
 };
 
 export type GoldStandardClause = {
@@ -141,7 +147,8 @@ export type AgentRun = {
   model?: string;
   ms: number;
   tokens?: number;
-  mode: "rag" | "full" | "gold";
+  mode: "rag" | "full" | "gold" | "vision";
+  skipped?: boolean; // the agent was not needed (e.g. no table pages)
   chunksSent?: number;
   chunksTotal?: number;
   receivedFrom?: string[]; // agents whose output this agent received
@@ -203,6 +210,8 @@ export type ContractAnalysisResult = {
   opposingFindings?: OpposingFinding[];
   missingProtections?: MissingProtection[];
   agentRuns?: AgentRun[];
+  effectiveDate?: string; // ISO date found in the contract, used for the milestone calendar
+  tableVision?: { pages: number[]; rows: number }; // pages read as images by the Table Vision agent
   goldSearch?: { clauses: number; matched: number; threshold: number }; // Gold Standard RAG stats
 };
 

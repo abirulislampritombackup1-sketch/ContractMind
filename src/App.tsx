@@ -75,7 +75,7 @@ type ResultTab = "Analysis" | "Contract" | "Redlines" | "Obligations" | "Gold St
 type Notice = { text: string; kind: "info" | "ok" | "warn" | "error" } | null;
 type Progress = Record<AgentKey, AgentState | "waiting">;
 
-const IDLE_PROGRESS: Progress = { risk: "waiting", opposing: "waiting", redlines: "waiting", obligations: "waiting", benchmarks: "waiting" };
+const IDLE_PROGRESS: Progress = { risk: "waiting", opposing: "waiting", redlines: "waiting", obligations: "waiting", tables: "waiting", benchmarks: "waiting" };
 
 const store = {
   get(k: string) {
@@ -759,7 +759,7 @@ function ResultsWorkspace(props: {
           )
         )}
         {tab === "Obligations" && (
-          <ObligationsView obligations={result.obligations} paymentMilestones={result.paymentMilestones} contractTitle={result.contractTitle} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.obligation(id))} />
+          <ObligationsView obligations={result.obligations} paymentMilestones={result.paymentMilestones} contractTitle={result.contractTitle} effectiveDate={result.effectiveDate} tableVision={result.tableVision} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.obligation(id))} />
         )}
         {tab === "Gold Standard" && <GoldStandardRAG comparisons={result.benchmarkComparisons} missing={result.missingProtections} search={result.goldSearch} />}
         {tab === "AI Counsel Chat" && (

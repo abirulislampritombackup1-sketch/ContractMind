@@ -28,20 +28,20 @@ const base64Bytes = (dataUrl: string) => dataUrl.length - dataUrl.indexOf(",") -
 
 export type PageImages = { parts: any[]; pagesSent: number; totalPages: number };
 
-/** Renders PDF pages to JPEG parts that together stay under `budget` bytes. */
-export async function pdfPagesToImages(file: File, budget = INLINE_BUDGET): Promise<PageImages> {
+/** Renders PDF pages (all, or only `onlyPages`) to JPEG parts that together stay under `budget` bytes. */
+export async function pdfPagesToImages(file: File, budget = INLINE_BUDGET, onlyPages?: number[]): Promise<PageImages> {
   const pdfjs = await import("pdfjs-dist");
   const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
   const totalPages = pdf.numPages;
-  const pages = Math.min(totalPages, MAX_PAGES);
-  const perPage = budget / pages;
+  const pageList = (onlyPages?.length ? onlyPages.filter((n) => n >= 1 && n <= totalPages) : Array.from({ length: totalPages }, (_, i) => i + 1)).slice(0, MAX_PAGES);
+  const perPage = budget / Math.max(1, pageList.length);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
   const parts: any[] = [];
   let used = 0;
   let pagesSent = 0;
 
-  for (let n = 1; n <= pages; n++) {
+  for (const n of pageList) {
     const page = await pdf.getPage(n);
     const base = page.getViewport({ scale: 1 });
     let dataUrl = "";

@@ -25,11 +25,12 @@ On Vercel, set `GEMINI_API_KEY` in the project's environment variables (the `/ap
 
 ## Agent pipeline
 
-Five Gemini agents work on each analysis (`runContractIntelligence` in `src/services/gemini.ts`):
+Six Gemini agents work on each analysis (`runContractIntelligence` in `src/services/gemini.ts`):
 
 ```
 Risk Auditor ──► Opposing Counsel ──► Commercial Dealmaker (redlines)
 Obligation Extractor                         (in parallel)
+Table page finder ──► Table Vision Agent     (in parallel, PDFs with tables)
 Gold Standard search ──► Benchmark Agent     (in parallel)
 ```
 
@@ -38,6 +39,13 @@ Gold Standard search ──► Benchmark Agent     (in parallel)
 - **Commercial Dealmaker** answers each finding with a commercially workable counter-offer; every redline names the finding it answers.
 - If an earlier agent fails, the next one still runs without the hand-off.
 - The analysing screen shows the pipeline live, and the Overview tab shows each agent's model, time, tokens and how many contract sections it read.
+
+## Payment tables and the milestone calendar
+
+- **Table Vision agent** (`src/services/tableVision.ts`): pages that look like payment or milestone tables (markdown table rows, payment words, schedules, amounts, percentages) are rendered to images (up to 4 pages) and read by Gemini as images, so nested phases, merged cells and column order survive. Rows keep their phase and page.
+- Table rows are merged with the milestones found in the text (same amount and similar name = same row), and each row shows whether it came from the text, the table image, or both. The agent is skipped, and shown as "Not needed", for DOCX/TXT, scanned PDFs (already read as images) and PDFs with no table pages.
+- **Milestone calendar** (Obligations → Milestones): the effective date is taken from the contract and can be changed. A milestone gets a date from a stated date, from "N days after the effective date / previous milestone", or from trigger text such as "within thirty (30) days of the Effective Date" (business days, weeks and months too). Event-based triggers ("upon acceptance") are listed as "depends on an event".
+- Timeline and month calendar views, colour-coded by party; **Add to calendar (.ics)** (all-day events with a 7-day reminder; calculated dates are marked as such) and **CSV** (UTF-8, opens in Excel) exports. Code: `src/utils/milestoneCalendar.ts`, `src/components/MilestoneCalendar.tsx`.
 
 ## Gold Standard RAG
 

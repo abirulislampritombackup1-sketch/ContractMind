@@ -17,6 +17,7 @@ import {
   Table,
 } from "lucide-react";
 import { useLang } from "../i18n/lang";
+import { MilestoneCalendar } from "./MilestoneCalendar";
 
 interface ObligationsViewProps {
   obligations: Obligation[];
@@ -24,6 +25,8 @@ interface ObligationsViewProps {
   contractTitle: string;
   locatedIds?: Set<string>;
   onShowInContract?: (id: string) => void;
+  effectiveDate?: string;
+  tableVision?: { pages: number[]; rows: number };
 }
 
 export const ObligationsView: React.FC<ObligationsViewProps> = ({
@@ -32,6 +35,8 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
   contractTitle,
   locatedIds,
   onShowInContract,
+  effectiveDate,
+  tableVision,
 }) => {
   const { L, term, sec } = useLang();
   const [viewMode, setViewMode] = useState<"matrix" | "milestones" | "json">("matrix");
@@ -272,6 +277,10 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
 
       {/* MODE 2: Financial & Payment Milestone Calendar */}
       {viewMode === "milestones" && (
+        <MilestoneCalendar milestones={paymentMilestones} contractTitle={contractTitle} effectiveDate={effectiveDate} tableVision={tableVision} />
+      )}
+
+      {viewMode === "milestones" && paymentMilestones.length > 0 && (
         <div className="bg-surface p-6 rounded-2xl border border-line space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-line">
             <div>
@@ -280,9 +289,11 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                 {L("Automatically extracted from contract payment schedules and hierarchical milestone tables.", "চুক্তির পেমেন্ট সূচি ও মাইলস্টোন টেবিল থেকে স্বয়ংক্রিয়ভাবে নেওয়া।")}
               </p>
             </div>
-            <div className="text-xs px-3 py-1 rounded-full bg-brand/15 text-brand font-bold">
-              {L("Vision-Enhanced Table Parser", "টেবিল থেকে পড়া")}
-            </div>
+            {tableVision && tableVision.pages.length > 0 && (
+              <div className="text-xs px-3 py-1 rounded-full bg-brand/15 text-brand font-bold">
+                {L("Includes rows read from table images", "টেবিলের ছবি থেকে পড়া সারিসহ")}
+              </div>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -300,8 +311,16 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
               <tbody className="divide-y divide-line/40">
                 {paymentMilestones.map((m) => (
                   <tr key={m.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3.5 pl-2 font-mono font-bold text-brand">{m.id}</td>
+                    <td className="py-3.5 pl-2 font-mono font-bold text-brand">
+                      {m.id}
+                      {(m.source === "table-image" || m.source === "both") && (
+                        <div className="text-[10px] font-sans font-semibold text-faint" title={L("Read from the table image", "টেবিলের ছবি থেকে পড়া")}>
+                          {L("table image", "টেবিলের ছবি")}{m.page ? ` · p.${m.page}` : ""}
+                        </div>
+                      )}
+                    </td>
                     <td className="py-3.5">
+                      {m.phase && <div className="text-[11px] text-faint">{m.phase}</div>}
                       <div className="font-semibold text-white">{m.milestone}</div>
                       <div className="text-muted text-[11px] mt-0.5">{m.deliverable}</div>
                     </td>

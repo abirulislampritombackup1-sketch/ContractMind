@@ -739,7 +739,7 @@ button.danger { color: var(--danger); }
 .apLane { display: flex; flex-direction: column; gap: 8px; }
 .apLaneLabel { font-size: 11.5px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--faint); }
 .apChain { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; }
-.apParallel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.apParallel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .apArrow { align-self: center; color: var(--brand); }
 .apTop { display: flex; gap: 10px; align-items: flex-start; }
 .apHandoff { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--brand); background: rgb(var(--brand-rgb) / 0.08); border-radius: 999px; padding: 2px 8px; width: fit-content; }
@@ -759,3 +759,32 @@ button.danger { color: var(--danger); }
 .missItem { border: 1px solid rgb(var(--danger-rgb) / 0.3); background: rgb(var(--danger-rgb) / 0.05); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .missItem.present, .missItem.not_applicable { border-color: var(--line); background: var(--card-2); }
 .missItem pre { white-space: pre-wrap; margin: 0; font: 12.5px/1.6 Georgia, 'Times New Roman', 'Noto Sans Bengali', serif; color: var(--text); background: var(--card); border-radius: 10px; padding: 10px 12px; }
+.agent.done.skipped { border-color: var(--line); opacity: 0.75; }
+
+/* ---------- Milestone calendar ---------- */
+.msTimeline { display: flex; flex-direction: column; gap: 10px; }
+.msRow { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; align-items: start; }
+.msDate { display: flex; flex-direction: column; padding-top: 10px; }
+.msDate b { font-size: 13px; color: var(--ink); }
+.msDate small { font-size: 11px; color: var(--faint); }
+.msItem { border: 1px solid var(--line); border-left: 4px solid var(--line-strong); border-radius: 12px; padding: 10px 12px; background: var(--card-2); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.msItem.brand { border-left-color: var(--brand); } .msItem.warn { border-left-color: var(--warn); }
+.msItemTop { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.msItemTop b { font-size: 13.5px; color: var(--ink); }
+.msAmount { margin-left: auto; font-weight: 800; color: var(--brand); font-size: 13.5px; }
+.msItemFoot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.msGrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.msWd { font-size: 11px; font-weight: 700; color: var(--faint); text-align: center; padding: 4px 0; }
+.msCell { min-height: 78px; border: 1px solid var(--line); border-radius: 8px; padding: 4px; background: var(--card); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.msCell.empty { background: transparent; border-style: dashed; opacity: 0.5; }
+.msCell.has { border-color: rgb(var(--brand-rgb) / 0.4); }
+.msDay { font-size: 11px; font-weight: 700; color: var(--muted); }
+.msEvent { font-size: 10.5px; line-height: 1.3; padding: 2px 4px; border-radius: 5px; background: var(--sunken); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msEvent.brand { background: rgb(var(--brand-rgb) / 0.12); color: var(--brand); }
+.msEvent.warn { background: rgb(var(--warn-rgb) / 0.14); color: var(--warn); }
+@media (max-width: 650px) {
+  .msRow { grid-template-columns: 1fr; gap: 4px; }
+  .msDate { flex-direction: row; gap: 8px; padding-top: 0; }
+  .msCell { min-height: 52px; }
+  .msEvent { font-size: 9px; }
+}

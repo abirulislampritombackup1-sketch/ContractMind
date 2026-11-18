@@ -113,6 +113,8 @@ Every item in the brief, where ContractMind stands today, and the step that fini
 
 ## Phase 4: The vision table agent and milestone calendar (about 1.5 days)
 
+> **Status:** built (steps 4.1 and 4.2).
+
 ### 4.1 Vision agent for tables (E3, R11)
 - **Files:** `src/rag/pdfToMarkdown.ts` (already detects tables), new `src/services/tableVision.ts`.
 - Find pages with tables, payment words or nested numbering (for example "Schedule", "Milestone", "Payment", "%", currency symbols).

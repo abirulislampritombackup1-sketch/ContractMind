@@ -2,10 +2,11 @@ import { ContractAnalysisResult, Playbook } from "../types";
 import { GOLD_STANDARD_CLAUSES } from "../data/goldStandards";
 import { Language } from "../i18n/translations";
 import { PLAYBOOKS_BN } from "../i18n/dataBn";
-import { documentParts } from "./docParts";
+import { documentParts, pdfPagesToImages } from "./docParts";
+import { findTablePages, mergeMilestones } from "./tableVision";
 import { retrieveGold, GoldRetrieval } from "../rag/goldIndex";
 import { labelOf } from "../rag/promptBuilder";
-import { AgentRun, MissingProtection, OpposingFinding } from "../types";
+import { AgentRun, MissingProtection, OpposingFinding, PaymentMilestone } from "../types";
 import { SAMPLE_CONTRACTS } from "../data/sampleContracts";
 import { applyScoring, buildScoring } from "../utils/scoring";
 import { RAG_CONFIG } from "../rag/config";
@@ -141,6 +142,7 @@ const AGENT_LABEL_BN: Record<string, string> = {
   "Obligations & payment milestones": "বাধ্যবাধকতা ও পেমেন্ট মাইলস্টোন",
   "Gold Standard benchmark comparison": "আদর্শ ধারার তুলনা",
   "Opposing counsel review": "প্রতিপক্ষ আইনজীবীর পর্যালোচনা",
+  "Payment table reading": "পেমেন্ট টেবিল পড়া",
 };
 
 export async function toBase64(f: File): Promise<string> {
@@ -230,6 +232,13 @@ const redlineSchema = (bn: boolean) => obj({
   ),
 });
 
+// When a milestone falls due: an exact date, or a number of days after a reference point.
+const MILESTONE_TIMING = {
+  dueDate: STR,
+  offsetDays: INT,
+  offsetFrom: en("effective_date", "previous_milestone", "acceptance", "invoice", "other"),
+};
+
 const OBLIGATION_SCHEMA = obj({
   obligations: arr(
     obj({
@@ -255,6 +264,27 @@ const OBLIGATION_SCHEMA = obj({
       deliverable: STR,
       responsibleParty: STR,
       status: en("Scheduled", "Conditional", "Pending"),
+      ...MILESTONE_TIMING,
+    })
+  ),
+  effectiveDate: STR,
+});
+
+// Rows of payment / milestone tables, read from page images (nested tables keep their phase).
+const TABLE_SCHEMA = obj({
+  effectiveDate: STR,
+  rows: arr(
+    obj({
+      id: STR,
+      phase: STR,
+      milestone: STR,
+      deliverable: STR,
+      amount: STR,
+      trigger: STR,
+      responsibleParty: STR,
+      status: en("Scheduled", "Conditional", "Pending"),
+      page: INT,
+      ...MILESTONE_TIMING,
     })
   ),
 });
@@ -280,7 +310,7 @@ const benchmarkSchema = (gold: boolean) => obj({
 });
 
 type AgentSpec = {
-  key: "risk" | "obligations" | "benchmarks" | "opposing" | "redlines";
+  key: "risk" | "obligations" | "benchmarks" | "opposing" | "redlines" | "tables";
   label: string; // shown to the user if this section fails
   schema: any;
   context: string; // playbook / gold-standard material this agent needs
@@ -414,6 +444,18 @@ For each Opposing Counsel finding you are given (if any), write one commercially
       }`,
     },
     {
+      key: "tables",
+      label: "Payment table reading",
+      schema: TABLE_SCHEMA,
+      retrieval: { queries: [], scale: 1, perQuery: 1 },
+      context: "",
+      task: `You are the TABLE VISION agent of ContractMind. The images above are contract pages that contain payment, fee or milestone tables, possibly nested (phases with sub-milestones), with merged cells or totals.
+Read every table row that is a payment, fee, milestone or deliverable with money or a due date attached. Skip totals and header rows.
+For each row: id ("T-1", ...); phase (the parent row or section heading for nested tables, "" if none); milestone; deliverable; amount (as written, with currency); trigger (when it is due, as written); responsibleParty ("Customer", "Vendor", "Buyer", "Seller" or the party name); status; page (the page number shown above the image); dueDate (YYYY-MM-DD only when an exact date is written, else ""); offsetDays and offsetFrom (e.g. "Effective Date + 60 days" → 60 and "effective_date"; -1 and "other" when not a number of days).
+effectiveDate: the contract's effective date as YYYY-MM-DD if visible on these pages, else "".
+Only report what is visible; never invent rows.`,
+    },
+    {
       key: "obligations",
       label: "Obligations & payment milestones",
       schema: OBLIGATION_SCHEMA,
@@ -431,7 +473,8 @@ For each Opposing Counsel finding you are given (if any), write one commercially
       context: "",
       task: `You are the OBLIGATION EXTRACTION agent of ContractMind.
 - obligations: 5 to 10 concrete obligations, ids "OBL-001", ... Include clauseRef, who owes it (obligor) and to whom (beneficiary), the requirement, the trigger or deadline, recurrence, breachConsequence, financialImpact (amount, penalty, or "Not specified"), and status ("Critical" for obligations with severe consequences).
-- paymentMilestones: every payment milestone or scheduled payment, including rows of any payment/milestone tables (ids "M-1", ...). Empty array if none.`,
+- paymentMilestones: every payment milestone or scheduled payment, including rows of any payment/milestone tables (ids "M-1", ...). Empty array if none. For each: dueDate (YYYY-MM-DD only when the contract states a calendar date, else ""), offsetDays and offsetFrom (e.g. "30 days after the Effective Date" → 30 and "effective_date"; "15 days after acceptance" → 15 and "acceptance"; use -1 and "other" when the timing is not a number of days).
+- effectiveDate: the contract's effective / commencement date as YYYY-MM-DD, or "" if not stated.`,
     },
     {
       key: "benchmarks",
@@ -531,7 +574,7 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
       if (!res.ok) throw new Error(await geminiErrorMessage(res, model));
       const data = await res.json();
       run.tokens = data?.usageMetadata?.totalTokenCount;
-      logUsage(a.key, model, data?.usageMetadata, { mode: run.mode === "gold" ? "rag" : run.mode, chunksSent: run.chunksSent, chunksTotal: run.chunksTotal });
+      logUsage(a.key, model, data?.usageMetadata, { mode: run.mode === "rag" || run.mode === "gold" ? "rag" : "full", chunksSent: run.chunksSent, chunksTotal: run.chunksTotal });
       const rawText: string = usageText(data);
       if (!rawText.trim()) throw new Error(M("Gemini returned an empty response.", "Gemini কোনো উত্তর দেয়নি।"));
       try {
@@ -620,13 +663,37 @@ Closest contract section: ${m.hits[0] ? `${labelOf(m.hits[0].chunk)} ${m.hits[0]
       });
     })();
 
-    const [riskS, obligationsS, opposingS, redlinesS, benchmarksS] = await Promise.allSettled([riskP, obligationsP, opposingP, redlinesP, benchmarksP]);
-    const settledBy: Record<AgentKey, PromiseSettledResult<any>> = { risk: riskS, obligations: obligationsS, opposing: opposingS, redlines: redlinesS, benchmarks: benchmarksS };
+    // Table Vision: pages that look like payment / milestone tables are read as images.
+    let tablePages: number[] = [];
+    const skipAgent = (key: AgentKey, note: string) => {
+      const run: AgentRun = { key, ok: true, skipped: true, ms: 0, mode: "vision", note };
+      runs.push(run);
+      onProgress?.(key, "done", run);
+      return null;
+    };
+    const tablesP = (async () => {
+      const isPdfFile = !!file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+      if (!isPdfFile || !index) return skipAgent("tables", isPdfFile ? "scanned pages are already read as images" : "no PDF pages");
+      tablePages = findTablePages(index.chunks);
+      if (!tablePages.length) return skipAgent("tables", "no table pages found");
+      const images = await pdfPagesToImages(file!, undefined, tablePages);
+      if (!images.pagesSent) return skipAgent("tables", "table pages too large to send");
+      tablePages = tablePages.slice(0, images.pagesSent);
+      return runAgent(spec("tables"), {
+        mode: "vision",
+        docParts: [{ text: `=== CONTRACT PAGES WITH TABLES (images): pages ${tablePages.join(", ")} ===` }, ...images.parts],
+        note: `pages ${tablePages.join(", ")}`,
+      });
+    })();
+
+    const [riskS, obligationsS, opposingS, redlinesS, benchmarksS, tablesS] = await Promise.allSettled([riskP, obligationsP, opposingP, redlinesP, benchmarksP, tablesP]);
+    const settledBy: Record<AgentKey, PromiseSettledResult<any>> = { risk: riskS, obligations: obligationsS, opposing: opposingS, redlines: redlinesS, benchmarks: benchmarksS, tables: tablesS };
     const byKey: Record<string, any> = {};
     const failed: string[] = [];
     for (const a of agents) {
       const st = settledBy[a.key];
       if (st.status === "fulfilled") byKey[a.key] = st.value;
+      else if (a.key === "tables") console.warn("[ContractMind] Table Vision failed; using milestones from the text:", st.reason);
       else {
         failed.push(M(a.label, AGENT_LABEL_BN[a.label] || a.label));
         console.warn(`[ContractMind] ${a.label} failed:`, st.reason);
@@ -652,8 +719,13 @@ Closest contract section: ${m.hits[0] ? `${labelOf(m.hits[0].chunk)} ${m.hits[0]
     }
 
     const g = gold as GoldRetrieval | null;
+    const tableRows = Array.isArray(byKey.tables?.rows) ? byKey.tables.rows.map((m: any, i: number) => sanitizeMilestone(m, i, "T")) : [];
+    const effective = [byKey.obligations?.effectiveDate, byKey.tables?.effectiveDate].find((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d));
     return {
       ...result,
+      paymentMilestones: tableRows.length ? mergeMilestones(result.paymentMilestones, tableRows) : result.paymentMilestones,
+      tableVision: byKey.tables ? { pages: tablePages, rows: tableRows.length } : undefined,
+      effectiveDate: effective,
       benchmarkComparisons: g ? enrichComparisons(result.benchmarkComparisons, g) : result.benchmarkComparisons,
       missingProtections: g ? missingFrom(g, byKey.benchmarks?.missingCheck) : undefined,
       goldSearch: g ? { clauses: GOLD_STANDARD_CLAUSES.length, matched: g.matched.length, threshold: RAG_CONFIG.goldMinSimilarity } : undefined,
@@ -784,17 +856,7 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
         : "Pending Review") as "Active" | "Critical" | "Pending Review",
     })),
 
-    paymentMilestones: safeArray(p.paymentMilestones).map((m: any, idx: number) => ({
-      id: safeString(m?.id, `M-${idx + 1}`),
-      milestone: safeString(m?.milestone, "Milestone"),
-      trigger: safeString(m?.trigger, "Not specified"),
-      amount: safeString(m?.amount, "TBD"),
-      deliverable: safeString(m?.deliverable, "Not specified"),
-      responsibleParty: safeString(m?.responsibleParty, "TBD"),
-      status: (["Pending", "Scheduled", "Conditional"].includes(m?.status)
-        ? m.status
-        : "Pending") as "Pending" | "Scheduled" | "Conditional",
-    })),
+    paymentMilestones: safeArray(p.paymentMilestones).map((m: any, idx: number) => sanitizeMilestone(m, idx, "M")),
 
     benchmarkComparisons: safeArray(p.benchmarkComparisons).map((b: any) => ({
       goldId: safeString(b?.goldId) || undefined,
@@ -812,6 +874,31 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
 }
 
 // ── Pipeline helpers ─────────────────────────────────────────────────────────
+
+const OFFSET_FROM = ["effective_date", "previous_milestone", "acceptance", "invoice", "other"] as const;
+
+/** Cleans one milestone row from the obligations agent or the Table Vision agent. */
+export function sanitizeMilestone(m: any, idx: number, prefix: string): PaymentMilestone {
+  const str = (v: any, fallback = "") => (typeof v === "string" ? v : fallback);
+  const days = Number(m?.offsetDays);
+  const page = Number(m?.page);
+  const due = str(m?.dueDate);
+  return {
+    id: str(m?.id, `${prefix}-${idx + 1}`) || `${prefix}-${idx + 1}`,
+    milestone: str(m?.milestone, "Milestone"),
+    trigger: str(m?.trigger, "Not specified"),
+    amount: str(m?.amount, "TBD"),
+    deliverable: str(m?.deliverable, "Not specified"),
+    responsibleParty: str(m?.responsibleParty, "TBD"),
+    status: (["Pending", "Scheduled", "Conditional"].includes(m?.status) ? m.status : "Pending") as PaymentMilestone["status"],
+    phase: str(m?.phase) || undefined,
+    dueDate: /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : undefined,
+    offsetDays: Number.isFinite(days) && days >= 0 ? Math.round(days) : undefined,
+    offsetFrom: OFFSET_FROM.includes(m?.offsetFrom) ? m.offsetFrom : undefined,
+    page: Number.isFinite(page) && page > 0 ? Math.round(page) : undefined,
+    source: prefix === "T" ? "table-image" : "text",
+  };
+}
 
 /** Adds similarity, section and page from the Gold Standard search to each comparison. */
 export function enrichComparisons(list: ContractAnalysisResult["benchmarkComparisons"], gold: GoldRetrieval) {
