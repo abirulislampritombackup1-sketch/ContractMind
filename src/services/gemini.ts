@@ -302,7 +302,7 @@ Tolerances:
 - Data Breach Notice Hours: ${playbook.tolerances.requireDataBreachNoticeHours} hours
 - Payment Terms Max Days: Net ${playbook.tolerances.paymentTermsMaxDays}
 Playbook Rules:
-${playbook.rules.map((r) => `- [${r.category}] ${r.id} ${r.title} (Severity: ${r.severity}, Weight: ${r.weight}): Target: "${r.targetStandard}". Unacceptable: ${r.unacceptableTerms.join(", ")}`).join("\n")}`;
+${playbook.rules.map((r) => `- [${r.category}] ${r.id} ${r.title} (Severity: ${r.severity}, Weight: ${r.weight}): Target: "${r.targetStandard}".${r.fallbackAllowed?.trim() ? ` Acceptable fallback: "${r.fallbackAllowed.trim()}".` : ""} Unacceptable: ${r.unacceptableTerms.filter((t) => t.trim()).join(", ") || "none listed"}`).join("\n")}`;
 
   const goldShort = `=== GOLD STANDARD BENCHMARKS ===
 ${GOLD_STANDARD_CLAUSES.map((g) => `- [${g.category}] ${g.title}: "${g.standardText.slice(0, 150)}..."`).join("\n")}`;
@@ -355,7 +355,7 @@ Score the contract against the selected playbook:
       label: "Redlines",
       schema: redlineSchema(lang === "bn"),
       retrieval: {
-        queries: playbook.rules.map((r) => `${r.title}: ${r.unacceptableTerms.join("; ")}`),
+        queries: playbook.rules.map((r) => `${r.title}: ${r.unacceptableTerms.filter((t) => t.trim()).join("; ") || r.targetStandard}`),
         scale: 2.5,
         perQuery: 1,
       },

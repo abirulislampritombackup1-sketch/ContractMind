@@ -3,7 +3,8 @@ import { AlertTriangle, CheckCircle2, CircleSlash, Info, Lightbulb, MapPin, Minu
 import { PlaybookScoring, RuleStatus } from "../types";
 import { STATUS_FACTOR, scoreOf } from "../utils/scoring";
 import { RULES_BN, TERMS_BN } from "../i18n/dataBn";
-import { useLang } from "../i18n/lang";
+import { toBnDigits, useLang } from "../i18n/lang";
+import { scoreSummary } from "../utils/riskReport";
 
 interface Props {
   scoring: PlaybookScoring;
@@ -85,6 +86,8 @@ export const PlaybookScorecard: React.FC<Props> = ({ scoring, playbookName, onWe
           ))}
         </div>
       </div>
+
+      <p className="scSummary">{lang === "bn" ? toBnDigits(scoreSummary(scoring, lang)) : scoreSummary(scoring, lang)}</p>
 
       {changed && (
         <div className="notice info" style={{ margin: "0 0 14px" }}>

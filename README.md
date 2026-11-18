@@ -23,6 +23,13 @@ pnpm build
 
 On Vercel, set `GEMINI_API_KEY` in the project's environment variables (the `/api/gemini` function attaches it).
 
+## Custom playbooks and the risk report
+
+- **Playbooks** page: duplicate a built-in playbook or start a new one, then edit its name, tolerances and rules (category, title, target standard, acceptable fallback, unacceptable terms, severity, weight). Changes save automatically in the browser (`localStorage`). Built-in playbooks stay read-only.
+- **Import / Export JSON** shares a playbook between people (`*.playbook.json`). Imports are validated and cleaned (`src/utils/playbookStore.ts`), and never replace a built-in playbook.
+- The scorecard shows a one-line explanation of the score, and every rule that is not passing gets an AI "what to do" suggestion.
+- **Risk report (PDF)** on the results page opens the print dialog with the score, rules, evidence, suggested actions and redlines; choose *Save as PDF*.
+
 ## Land Guide and Case Helper
 
 Two extra tabs for people in Bangladesh. Their content is in Bangla; the tab names follow the EN/বাংলা toggle.

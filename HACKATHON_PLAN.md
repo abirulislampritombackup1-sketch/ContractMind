@@ -69,6 +69,8 @@ Every item in the brief, where ContractMind stands today, and the step that fini
 
 ## Phase 2: Custom playbooks and transparent scoring (about 1 day)
 
+> **Status:** built (steps 2.1 and 2.2).
+
 ### 2.1 Real custom playbooks
 - **Files:** `src/components/PlaybookStudio.tsx`, new `src/utils/playbookStore.ts`.
 - Allow creating a playbook from scratch or from a preset, adding, editing and deleting rules (category, title, target standard, unacceptable terms, severity, weight), and setting tolerances.

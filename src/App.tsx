@@ -5,6 +5,7 @@ import {
   BookOpen,
   CheckCircle2,
   Database,
+  Download,
   FileCheck2,
   FileEdit,
   FileSearch,
@@ -42,6 +43,8 @@ import { runContractIntelligence, AgentKey, AgentState } from "./services/gemini
 import { RAG_CONFIG } from "./rag/config";
 import { indexDocument } from "./rag";
 import { analysisKey, getCachedAnalysis, saveAnalysis } from "./utils/analysisCache";
+import { isCustom, loadCustomPlaybooks, playbookProblems, saveCustomPlaybooks } from "./utils/playbookStore";
+import { openRiskReport } from "./utils/riskReport";
 import { Language } from "./i18n/translations";
 import { LangProvider, toBnDigits } from "./i18n/lang";
 import { SAMPLES_BN, playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
@@ -99,7 +102,12 @@ export default function App() {
   const [busyExtracting, setBusyExtracting] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
 
-  const [currentPlaybook, setCurrentPlaybook] = useState<Playbook>(DEFAULT_PLAYBOOKS[0]);
+  const [customPlaybooks, setCustomPlaybooks] = useState<Playbook[]>(loadCustomPlaybooks);
+  const [currentPlaybook, setCurrentPlaybook] = useState<Playbook>(
+    () => [...DEFAULT_PLAYBOOKS, ...customPlaybooks].find((p) => p.id === store.get("cm-playbook")) || DEFAULT_PLAYBOOKS[0]
+  );
+  useEffect(() => saveCustomPlaybooks(customPlaybooks), [customPlaybooks]);
+  useEffect(() => store.set("cm-playbook", currentPlaybook.id), [currentPlaybook.id]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState<Progress>(IDLE_PROGRESS);
   const [analysisResult, setAnalysisResult] = useState<ContractAnalysisResult | null>(null);
@@ -188,6 +196,11 @@ export default function App() {
   const handleRunAnalysis = async (force = false) => {
     if (!hasDoc) {
       setNotice({ kind: "warn", text: L("Add a contract first — upload a file or pick a sample.", "প্রথমে একটি চুক্তি যোগ করুন — ফাইল আপলোড করুন বা স্যাম্পল বেছে নিন।") });
+      return;
+    }
+    if (isCustom(currentPlaybook) && playbookProblems(currentPlaybook).length) {
+      setNotice({ kind: "warn", text: L("Your custom playbook is incomplete: give every rule a title, target standard and weight.", "আপনার কাস্টম প্লেবুক অসম্পূর্ণ: প্রতিটি নিয়মের শিরোনাম, কাঙ্ক্ষিত মান ও ওজন দিন।") });
+      setView("playbooks");
       return;
     }
     setView("review");
@@ -421,7 +434,7 @@ export default function App() {
                 </div>
 
                 <div className="pbList">
-                  {[...DEFAULT_PLAYBOOKS, ...(DEFAULT_PLAYBOOKS.some((p) => p.id === currentPlaybook.id) ? [] : [currentPlaybook])].map((pb) => (
+                  {[...DEFAULT_PLAYBOOKS, ...customPlaybooks].map((pb) => (
                     <button
                       key={pb.id}
                       className={`pbOpt ${currentPlaybook.id === pb.id ? "on" : ""}`}
@@ -463,7 +476,7 @@ export default function App() {
           <>
             <PageIntro
               title={L("Negotiation playbooks", "নেগোসিয়েশন প্লেবুক")}
-              desc={L("Pick a ready-made policy or tune your own tolerances. The selected playbook is used for the next analysis.", "তৈরি নীতি বেছে নিন অথবা নিজের মতো সাজান। নির্বাচিত প্লেবুক পরবর্তী বিশ্লেষণে ব্যবহৃত হবে।")}
+              desc={L("Pick a ready-made playbook or build your own. The selected playbook is used for the next analysis.", "তৈরি প্লেবুক বেছে নিন অথবা নিজের প্লেবুক বানান। নির্বাচিত প্লেবুক পরবর্তী বিশ্লেষণে ব্যবহৃত হবে।")}
               action={
                 <button className="primary" onClick={() => setView("review")}>
                   {L("Use & continue", "ব্যবহার করে এগিয়ে যান")} <ArrowRight size={15} />
@@ -472,10 +485,9 @@ export default function App() {
             />
             <PlaybookStudio
               currentPlaybook={currentPlaybook}
-              onSelectPlaybook={(pb: Playbook) => {
-                setCurrentPlaybook(pb);
-                setNotice({ kind: "ok", text: L(`Playbook selected: ${pb.name}`, `প্লেবুক নির্বাচিত: ${pbName(pb)}`) });
-              }}
+              onSelectPlaybook={setCurrentPlaybook}
+              customPlaybooks={customPlaybooks}
+              onCustomChange={setCustomPlaybooks}
             />
           </>
         )}
@@ -712,6 +724,13 @@ function ResultsWorkspace(props: {
           </div>
         </div>
         <div className="actions">
+          <button
+            className="ghostW"
+            onClick={() => openRiskReport(result, playbookLabel(result.playbookUsed, lang === "bn"), lang)}
+            title={L("Opens the print dialog; choose Save as PDF", "প্রিন্ট ডায়ালগ খোলে; Save as PDF বেছে নিন")}
+          >
+            <Download size={14} /> {L("Risk report (PDF)", "ঝুঁকি প্রতিবেদন (PDF)")}
+          </button>
           <button className="ghostW" onClick={props.onRerun} disabled={!props.canRerun}>
             <RotateCcw size={14} /> {L("Re-run", "আবার চালান")}
           </button>
