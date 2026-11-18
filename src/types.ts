@@ -212,6 +212,7 @@ export type ContractAnalysisResult = {
   agentRuns?: AgentRun[];
   effectiveDate?: string; // ISO date found in the contract, used for the milestone calendar
   tableVision?: { pages: number[]; rows: number }; // pages read as images by the Table Vision agent
+  rationaleCheck?: { repaired: number; dropped: number }; // redlines whose reasoning was filled in or that were removed
   goldSearch?: { clauses: number; matched: number; threshold: number }; // Gold Standard RAG stats
 };
 

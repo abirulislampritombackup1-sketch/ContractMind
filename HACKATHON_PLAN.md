@@ -134,6 +134,8 @@ Every item in the brief, where ContractMind stands today, and the step that fini
 
 ## Phase 5: Redlines and obligations polish (about 1 day)
 
+> **Status:** built (steps 5.1, 5.2 and 5.3). The schema is downloadable from the app and kept at `src/schema/obligations.v1.json`.
+
 ### 5.1 Chain of thought for every redline (E4)
 - Already shown. Add a check that drops or re-asks for any redline missing its rationale, and include the rationale as Word comments (already done) and in the full document view.
 

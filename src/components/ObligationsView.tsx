@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useLang } from "../i18n/lang";
 import { MilestoneCalendar } from "./MilestoneCalendar";
+import { buildObligationsExport, OBLIGATIONS_SCHEMA, SCHEMA_VERSION, validateObligationsExport } from "../utils/obligationsExport";
 
 interface ObligationsViewProps {
   obligations: Obligation[];
@@ -27,6 +28,9 @@ interface ObligationsViewProps {
   onShowInContract?: (id: string) => void;
   effectiveDate?: string;
   tableVision?: { pages: number[]; rows: number };
+  /** Obligation id → contract page, found by locating the clause in the text. */
+  pages?: Record<string, number>;
+  playbook?: string;
 }
 
 export const ObligationsView: React.FC<ObligationsViewProps> = ({
@@ -37,8 +41,10 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
   onShowInContract,
   effectiveDate,
   tableVision,
+  pages,
+  playbook,
 }) => {
-  const { L, term, sec } = useLang();
+  const { L, term, sec, num } = useLang();
   const [viewMode, setViewMode] = useState<"matrix" | "milestones" | "json">("matrix");
   const [filterObligor, setFilterObligor] = useState<string>("All");
   const [filterCategory, setFilterCategory] = useState<string>("All");
@@ -50,18 +56,14 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
     return true;
   });
 
-  const structuredExportPayload = {
-    contractTitle,
-    extractionDate: new Date().toISOString(),
-    obligationsSummary: {
-      totalCount: obligations.length,
-      customerCount: obligations.filter((o) => o.obligor === "Customer").length,
-      vendorCount: obligations.filter((o) => o.obligor === "Vendor").length,
-      criticalCount: obligations.filter((o) => o.status === "Critical").length,
-    },
-    paymentMilestones,
-    obligations,
-  };
+  // One export, validated against the published schema before it is shown or downloaded.
+  const structuredExportPayload = React.useMemo(
+    () => buildObligationsExport({ contractTitle, playbook, obligations, paymentMilestones, effectiveDate, pages }),
+    [contractTitle, playbook, obligations, paymentMilestones, effectiveDate, pages]
+  );
+  const schemaErrors = React.useMemo(() => validateObligationsExport(structuredExportPayload), [structuredExportPayload]);
+  const valid = schemaErrors.length === 0;
+  const downloadSchema = () => downloadJsonFile(OBLIGATIONS_SCHEMA, "contractmind-obligations.v1.schema.json");
 
   const handleCopyJson = () => {
     navigator.clipboard.writeText(JSON.stringify(structuredExportPayload, null, 2));
@@ -70,6 +72,10 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
   };
 
   const handleDownloadJson = () => {
+    if (!valid) {
+      setViewMode("json");
+      return;
+    }
     downloadJsonFile(structuredExportPayload, `${contractTitle.replace(/\s+/g, "_")}_Obligations.json`);
   };
 
@@ -204,7 +210,7 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
                     <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-brand/15 text-brand">
                       {o.id}
                     </span>
-                    <span className="text-xs text-faint">{sec(o.clauseRef)}</span>
+                    <span className="text-xs text-faint">{sec(o.clauseRef)}{pages?.[o.id] ? ` · ${L("p.", "পৃ.")} ${num(pages[o.id])}` : ""}</span>
                     {onShowInContract && locatedIds?.has(`obl:${o.id}`) && (
                       <button className="locBtn" onClick={() => onShowInContract(o.id)} title={L("Highlight this clause in the original contract", "মূল চুক্তিতে এই ধারাটি দেখান")}>
                         {L("Show in contract", "চুক্তিতে দেখুন")}
@@ -358,17 +364,31 @@ export const ObligationsView: React.FC<ObligationsViewProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-line">
             <div className="flex items-center gap-2">
               <Code size={18} className="text-brand" />
-              <h3 className="font-bold text-white text-base">{L("Validated Structured Output Schema", "যাচাইকৃত JSON ডেটা")}</h3>
+              <h3 className="font-bold text-white text-base">{L("Structured JSON export", "কাঠামোগত JSON এক্সপোর্ট")}</h3>
+              {valid ? (
+                <span className="tag ok"><CheckCircle2 size={11} /> {L(`Valid against ${SCHEMA_VERSION}`, `${SCHEMA_VERSION} অনুযায়ী বৈধ`)}</span>
+              ) : (
+                <span className="tag danger"><ShieldAlert size={11} /> {L("Does not match the schema", "স্কিমার সাথে মেলেনি")}</span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button onClick={handleCopyJson} className="secondary text-xs">
                 <Copy size={13} /> {copied ? L("Copied!", "কপি হয়েছে!") : L("Copy JSON", "JSON কপি")}
               </button>
-              <button onClick={handleDownloadJson} className="primary text-xs">
+              <button onClick={downloadSchema} className="secondary text-xs" title={L("JSON Schema (draft 2020-12) this export follows", "এই এক্সপোর্ট যে JSON Schema (draft 2020-12) মেনে চলে")}>
+                <Code size={13} /> {L("Schema", "স্কিমা")}
+              </button>
+              <button onClick={handleDownloadJson} className="primary text-xs" disabled={!valid}>
                 <Download size={13} /> {L("Download .json", ".json ডাউনলোড")}
               </button>
             </div>
           </div>
+          {!valid && (
+            <div className="notice error" style={{ margin: 0 }}>
+              <ShieldAlert size={16} />
+              <span>{L("The export does not match the schema, so download is blocked:", "এক্সপোর্টটি স্কিমার সাথে মেলেনি, তাই ডাউনলোড বন্ধ:")} {schemaErrors.join("; ")}</span>
+            </div>
+          )}
           <pre className="preview max-h-[550px] overflow-y-auto font-mono text-xs text-brand/90 bg-[#060b16] p-4 rounded-xl border border-line">
             {JSON.stringify(structuredExportPayload, null, 2)}
           </pre>

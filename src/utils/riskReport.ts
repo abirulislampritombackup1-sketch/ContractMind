@@ -6,6 +6,7 @@ import { ContractAnalysisResult, PlaybookScoring, RuleStatus } from "../types";
 import { Language } from "../i18n/translations";
 import { RULES_BN, TERMS_BN } from "../i18n/dataBn";
 import { STATUS_FACTOR, scoreOf } from "./scoring";
+import { printHtml } from "./printHtml";
 
 type T = (en: string, bn: string) => string;
 
@@ -111,24 +112,8 @@ ${redlines ? `<h2>${esc(L("Proposed redlines", "প্রস্তাবিত �
 </body></html>`;
 }
 
-/**
- * Prints the report from a hidden frame on the current page (no pop-up, so pop-up
- * blockers do not interfere). The user picks "Save as PDF" in the print dialog.
- */
+/** Prints the report (no pop-up); the user picks "Save as PDF" in the print dialog. */
 export function openRiskReport(result: ContractAnalysisResult, playbookName: string, lang: Language): boolean {
-  document.getElementById("cm-report-frame")?.remove();
-  const frame = document.createElement("iframe");
-  frame.id = "cm-report-frame";
-  frame.setAttribute("aria-hidden", "true");
-  frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
-  frame.srcdoc = buildRiskReportHtml(result, playbookName, lang);
-  frame.onload = () => {
-    const w = frame.contentWindow;
-    if (!w) return;
-    // Give the web fonts a moment so Bangla text prints in the right font.
-    const go = () => { w.focus(); w.print(); };
-    (w.document as any).fonts?.ready ? (w.document as any).fonts.ready.then(() => setTimeout(go, 100)) : setTimeout(go, 400);
-  };
-  document.body.appendChild(frame);
+  printHtml(buildRiskReportHtml(result, playbookName, lang), "cm-report-frame");
   return true;
 }

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:contractmind:schema:obligations:v1",
+  "title": "ContractMind obligations export",
+  "description": "Machine-readable obligations and payment milestones extracted from one contract. Version 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generator", "contractTitle", "extractionDate", "effectiveDate", "summary", "obligations", "paymentMilestones"],
+  "properties": {
+    "schemaVersion": { "const": "contractmind.obligations/1.0" },
+    "generator": { "type": "string" },
+    "contractTitle": { "type": "string", "minLength": 1 },
+    "playbook": { "type": "string" },
+    "extractionDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$", "description": "ISO 8601 date-time (UTC)." },
+    "effectiveDate": { "$ref": "#/$defs/dateOrNull", "description": "Contract effective date, when known." },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalObligations", "vendorObligations", "customerObligations", "criticalObligations", "paymentMilestones", "datedMilestones"],
+      "properties": {
+        "totalObligations": { "type": "integer", "minimum": 0 },
+        "vendorObligations": { "type": "integer", "minimum": 0 },
+        "customerObligations": { "type": "integer", "minimum": 0 },
+        "criticalObligations": { "type": "integer", "minimum": 0 },
+        "paymentMilestones": { "type": "integer", "minimum": 0 },
+        "datedMilestones": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "obligations": { "type": "array", "items": { "$ref": "#/$defs/obligation" } },
+    "paymentMilestones": { "type": "array", "items": { "$ref": "#/$defs/milestone" } }
+  },
+  "$defs": {
+    "dateOrNull": { "oneOf": [{ "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }, { "type": "null" }] },
+    "pageOrNull": { "oneOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
+    "obligation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "clauseRef", "page", "category", "obligor", "beneficiary", "requirement", "triggerOrDeadline", "recurrence", "breachConsequence", "financialImpact", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "clauseRef": { "type": "string", "description": "Clause reference in the contract, e.g. \"Section 2.2\"." },
+        "page": { "$ref": "#/$defs/pageOrNull" },
+        "category": { "enum": ["Payment & Financial", "Reporting & Notice", "Compliance & Security", "Delivery & Milestones", "Termination & Transition", "IP & Confidentiality"] },
+        "obligor": { "enum": ["Customer", "Vendor", "Mutual", "Third Party"] },
+        "beneficiary": { "enum": ["Customer", "Vendor", "Mutual"] },
+        "requirement": { "type": "string" },
+        "triggerOrDeadline": { "type": "string" },
+        "recurrence": { "enum": ["One-time", "Monthly", "Quarterly", "Annual", "Trigger-based", "Ongoing"] },
+        "breachConsequence": { "type": "string" },
+        "financialImpact": { "type": "string" },
+        "status": { "enum": ["Active", "Critical", "Pending Review"] }
+      }
+    },
+    "milestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "phase", "milestone", "deliverable", "amount", "trigger", "dueDate", "dateBasis", "responsibleParty", "status", "source", "page"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "phase": { "type": ["string", "null"] },
+        "milestone": { "type": "string" },
+        "deliverable": { "type": "string" },
+        "amount": { "type": "string", "description": "Amount as written in the contract, with currency." },
+        "trigger": { "type": "string" },
+        "dueDate": { "$ref": "#/$defs/dateOrNull" },
+        "dateBasis": { "enum": ["stated", "computed", "event"], "description": "stated = date written in the contract; computed = calculated from the trigger; event = depends on something happening." },
+        "responsibleParty": { "type": "string" },
+        "status": { "enum": ["Pending", "Scheduled", "Conditional"] },
+        "source": { "enum": ["text", "table-image", "both"] },
+        "page": { "$ref": "#/$defs/pageOrNull" }
+      }
+    }
+  }
+}

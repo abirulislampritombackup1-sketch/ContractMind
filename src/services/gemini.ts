@@ -6,7 +6,7 @@ import { documentParts, pdfPagesToImages } from "./docParts";
 import { findTablePages, mergeMilestones } from "./tableVision";
 import { retrieveGold, GoldRetrieval } from "../rag/goldIndex";
 import { labelOf } from "../rag/promptBuilder";
-import { AgentRun, MissingProtection, OpposingFinding, PaymentMilestone } from "../types";
+import { AgentRun, MissingProtection, OpposingFinding, PaymentMilestone, RedlineItem } from "../types";
 import { SAMPLE_CONTRACTS } from "../data/sampleContracts";
 import { applyScoring, buildScoring } from "../utils/scoring";
 import { RAG_CONFIG } from "../rag/config";
@@ -718,6 +718,10 @@ Closest contract section: ${m.hits[0] ? `${labelOf(m.hits[0].chunk)} ${m.hits[0]
       result = applyScoring(result, scoring);
     }
 
+    // Every redline must explain itself: re-ask once for missing rationales, then drop the rest.
+    const checked = await ensureRationales(result.redlines, langBlock);
+    result = { ...result, redlines: checked.redlines };
+
     const g = gold as GoldRetrieval | null;
     const tableRows = Array.isArray(byKey.tables?.rows) ? byKey.tables.rows.map((m: any, i: number) => sanitizeMilestone(m, i, "T")) : [];
     const effective = [byKey.obligations?.effectiveDate, byKey.tables?.effectiveDate].find((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d));
@@ -731,6 +735,7 @@ Closest contract section: ${m.hits[0] ? `${labelOf(m.hits[0].chunk)} ${m.hits[0]
       goldSearch: g ? { clauses: GOLD_STANDARD_CLAUSES.length, matched: g.matched.length, threshold: RAG_CONFIG.goldMinSimilarity } : undefined,
       opposingFindings: sanitizeFindings(byKey.opposing?.findings),
       agentRuns: runs,
+      rationaleCheck: checked.repaired || checked.dropped ? { repaired: checked.repaired, dropped: checked.dropped } : undefined,
       incompleteSections: failed.length ? failed : undefined,
       modelsUsed: [...modelsUsed],
     };
@@ -874,6 +879,66 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
 }
 
 // ── Pipeline helpers ─────────────────────────────────────────────────────────
+
+const COT_KEYS = ["opposingCounselStance", "commercialRiskAssessment", "legalRationale", "negotiationTalkingPoint"] as const;
+const isBlank = (v: unknown) => typeof v !== "string" || !v.trim() || /^not provided/i.test(v.trim());
+
+/** True when the redline explains all four parts of its reasoning. */
+export const hasRationale = (r: RedlineItem) => COT_KEYS.every((k) => !isBlank(r.chainOfThought?.[k]));
+
+const RATIONALE_SCHEMA = obj({
+  rationales: arr(obj({ id: STR, opposingCounselStance: STR, commercialRiskAssessment: STR, legalRationale: STR, negotiationTalkingPoint: STR })),
+});
+
+/**
+ * Redlines without a full chain-of-thought rationale are sent back once to fill it in.
+ * Any still incomplete afterwards are removed, so every redline shown is explained.
+ */
+export async function ensureRationales(
+  redlines: RedlineItem[],
+  langBlock: string,
+  ask: (body: any) => Promise<{ res: Response; model: string }> = callGemini
+): Promise<{ redlines: RedlineItem[]; repaired: number; dropped: number }> {
+  const gaps = redlines.filter((r) => !hasRationale(r));
+  if (!gaps.length) return { redlines, repaired: 0, dropped: 0 };
+  let fixes: any[] = [];
+  try {
+    const { res } = await ask({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `${langBlock}\n\n=== YOUR TASK ===\nFor each proposed contract change below, explain the reasoning: opposingCounselStance (why the original clause favours the other side), commercialRiskAssessment (the practical business risk), legalRationale (the legal justification for the change), negotiationTalkingPoint (what to say to the other side). One or two sentences each.\n\n${gaps
+                .map((r) => `- id ${r.id} (${r.clauseId}, ${r.sectionTitle})\n  Original: "${r.originalText}"\n  Proposed: "${r.proposedText}"`)
+                .join("\n")}`,
+            },
+          ],
+        },
+      ],
+      generationConfig: { responseMimeType: "application/json", responseSchema: RATIONALE_SCHEMA, temperature: 0.1, thinkingConfig: { thinkingLevel: "low" } },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      fixes = JSON.parse(usageText(data).replace(/```json|```/gi, "").trim())?.rationales || [];
+    }
+  } catch (e) {
+    console.warn("[ContractMind] Could not fill in missing redline rationales:", e);
+  }
+  let repaired = 0;
+  const merged = redlines.map((r) => {
+    if (hasRationale(r)) return r;
+    const f = fixes.find((x) => String(x?.id).toUpperCase() === r.id.toUpperCase());
+    if (!f) return r;
+    const cot = { ...r.chainOfThought };
+    for (const k of COT_KEYS) if (isBlank(cot[k]) && !isBlank(f[k])) cot[k] = f[k];
+    const next = { ...r, chainOfThought: cot };
+    if (hasRationale(next)) repaired++;
+    return next;
+  });
+  const kept = merged.filter(hasRationale);
+  return { redlines: kept, repaired, dropped: merged.length - kept.length };
+}
 
 const OFFSET_FROM = ["effective_date", "previous_milestone", "acceptance", "invoice", "other"] as const;
 

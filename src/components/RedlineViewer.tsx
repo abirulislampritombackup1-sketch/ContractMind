@@ -17,10 +17,13 @@ import {
   CheckCircle2,
   FileCheck,
   FileDown,
+  FileText,
   MapPin,
   SearchX,
 } from "lucide-react";
 import { useLang } from "../i18n/lang";
+import { buildRedlinedDocument, redlinedHtml } from "../utils/redlineDocument";
+import { printHtml } from "../utils/printHtml";
 
 interface RedlineViewerProps {
   originalText: string;
@@ -34,6 +37,7 @@ interface RedlineViewerProps {
   onShowInContract?: (id: string) => void;
   /** Opposing Counsel findings the Dealmaker answered with these redlines. */
   findings?: OpposingFinding[];
+  rationaleCheck?: { repaired: number; dropped: number };
 }
 
 export const RedlineViewer: React.FC<RedlineViewerProps> = ({
@@ -47,8 +51,9 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
   locatedIds,
   onShowInContract,
   findings,
+  rationaleCheck,
 }) => {
-  const { L, term, bn, sec } = useLang();
+  const { L, term, bn, sec, num } = useLang();
   const [docxState, setDocxState] = useState<{ busy: boolean; msg: string; err?: boolean }>({ busy: false, msg: "" });
 
   const handleDownloadDocx = async () => {
@@ -75,7 +80,8 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
       setDocxState({ busy: false, msg: L(`Could not create the Word file: ${e?.message || e}`, `Word ফাইল তৈরি করা যায়নি: ${e?.message || e}`), err: true });
     }
   };
-  const [viewMode, setViewMode] = useState<"redline" | "clean">("redline");
+  const [viewMode, setViewMode] = useState<"redline" | "document" | "clean">("redline");
+  const [docSel, setDocSel] = useState<string | null>(null);
   const [expandedCot, setExpandedCot] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -118,6 +124,9 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
             >
               <FileEdit size={14} className="inline mr-1.5" /> {L("Redline Diff View", "পরিবর্তন দেখুন")}
             </button>
+            <button className={viewMode === "document" ? "on" : ""} onClick={() => setViewMode("document")}>
+              <FileText size={14} className="inline mr-1.5" /> {L("Full document", "পুরো ডকুমেন্ট")}
+            </button>
             <button
               className={viewMode === "clean" ? "on" : ""}
               onClick={() => setViewMode("clean")}
@@ -128,6 +137,14 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
 
           <button onClick={handleDownloadDocx} className="primary text-xs" disabled={docxState.busy || redlines.every((r) => r.accepted === false)} title={L("Word file with tracked changes and rationale comments", "চিহ্নিত পরিবর্তন ও ব্যাখ্যাসহ Word ফাইল")}>
             {docxState.busy ? <span className="spinner" /> : <FileDown size={14} />} {L("Download Word redline", "Word রেডলাইন ডাউনলোড")}
+          </button>
+          <button
+            className="secondary text-xs"
+            disabled={!redlines.some((r) => r.accepted !== false)}
+            title={L("Opens the print dialog; choose Save as PDF", "প্রিন্ট ডায়ালগ খোলে; Save as PDF বেছে নিন")}
+            onClick={() => printHtml(redlinedHtml({ title: contractTitle, playbook: playbookName, text: originalText, redlines, lang: bn ? "bn" : "en" }), "cm-redline-frame")}
+          >
+            <FileDown size={14} /> {L("Redlined PDF", "রেডলাইন PDF")}
           </button>
           <button
             onClick={() => downloadTextFile(cleanDoc, "ContractMind_Reconciled_Clean.txt")}
@@ -143,6 +160,18 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
           {docxState.err ? <ShieldAlert size={18} /> : <CheckCircle2 size={18} />}
           <span>{docxState.msg}</span>
           <button onClick={() => setDocxState({ busy: false, msg: "" })} aria-label={L("Dismiss", "বন্ধ করুন")}><X size={16} /></button>
+        </div>
+      )}
+
+      {rationaleCheck && (
+        <div className="notice info">
+          <Sparkles size={16} />
+          <span>
+            {L(
+              `Every redline must explain its reasoning. ${rationaleCheck.repaired ? `${rationaleCheck.repaired} redline(s) came back without full reasoning and were completed by a second AI pass.` : ""} ${rationaleCheck.dropped ? `${rationaleCheck.dropped} redline(s) were removed because their reasoning could not be completed.` : ""}`,
+              `প্রতিটি রেডলাইনের যুক্তি থাকতে হবে। ${rationaleCheck.repaired ? `${num(rationaleCheck.repaired)}টি রেডলাইনের যুক্তি অসম্পূর্ণ ছিল, দ্বিতীয়বার এআই দিয়ে পূরণ করা হয়েছে।` : ""} ${rationaleCheck.dropped ? `${num(rationaleCheck.dropped)}টি রেডলাইন বাদ দেওয়া হয়েছে কারণ যুক্তি পূরণ করা যায়নি।` : ""}`
+            )}
+          </span>
         </div>
       )}
 
@@ -218,7 +247,9 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
       </div>
 
       {/* Clean Document View */}
-      {viewMode === "clean" ? (
+      {viewMode === "document" ? (
+        <FullDocument text={originalText} redlines={redlines} selected={docSel} onSelect={setDocSel} onUpdateRedline={onUpdateRedline} />
+      ) : viewMode === "clean" ? (
         <div className="bg-surface p-6 rounded-2xl border border-line space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-line">
             <div className="flex items-center gap-2">
@@ -430,3 +461,109 @@ export const RedlineViewer: React.FC<RedlineViewerProps> = ({
   );
 };
 
+
+/** The whole contract with every change in place; clicking a change shows its reasoning. */
+function FullDocument({
+  text,
+  redlines,
+  selected,
+  onSelect,
+  onUpdateRedline,
+}: {
+  text: string;
+  redlines: RedlineItem[];
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  onUpdateRedline: (id: string, accepted: boolean | null) => void;
+}) {
+  const { L, bn, sec, num } = useLang();
+  const doc = React.useMemo(() => buildRedlinedDocument(text, redlines, (r) => r.accepted !== false), [text, redlines]);
+  const sel = redlines.find((r) => r.id === selected);
+  const placedCount = doc.segments.filter((s) => s.kind === "change").length;
+
+  if (!text.trim() || text.startsWith("[Scanned PDF")) {
+    return (
+      <div className="notice info">
+        <FileText size={18} />
+        <span>{L("This is a scanned PDF, so there is no text to show the changes in. Use the Word or PDF download instead.", "এটি স্ক্যান করা PDF, তাই পরিবর্তন দেখানোর মতো টেক্সট নেই। Word বা PDF ডাউনলোড ব্যবহার করুন।")}</span>
+      </div>
+    );
+  }
+
+  const renderText = (t: string, key: string) =>
+    t.split(/(\n?\[Page \d+\]\n?)/).map((part, i) => {
+      const m = part.match(/\[Page (\d+)\]/);
+      return m ? <span key={`${key}-${i}`} className="pageMark">{L("Page", "পৃষ্ঠা")} {num(m[1])}</span> : <React.Fragment key={`${key}-${i}`}>{part}</React.Fragment>;
+    });
+
+  return (
+    <div className="fdWrap">
+      <div className="fdDoc card">
+        <div className="cvLegend">
+          <span><del className="fdDel">{L("deleted", "বাদ")}</del></span>
+          <span><ins className="fdIns">{L("inserted", "যোগ")}</ins></span>
+          <span className="text-faint">{L("dotted = proposed, not yet accepted · click a change for its reasoning", "ডটেড = প্রস্তাবিত, এখনও গৃহীত নয় · যুক্তি দেখতে পরিবর্তনে ক্লিক করুন")}</span>
+        </div>
+        <div className="fdText">
+          {doc.segments.map((s, i) =>
+            s.kind === "text" ? (
+              <React.Fragment key={i}>{renderText(s.text, String(i))}</React.Fragment>
+            ) : (
+              <button
+                key={i}
+                className={`fdChange ${s.redline.accepted === true ? "accepted" : "pending"} ${selected === s.redline.id ? "sel" : ""}`}
+                onClick={() => onSelect(selected === s.redline.id ? null : s.redline.id)}
+                title={s.redline.chainOfThought.legalRationale}
+              >
+                <del className="fdDel">{s.original}</del>
+                {s.redline.action !== "delete" && <ins className="fdIns">{s.redline.proposedText}</ins>}
+                <sup>{s.redline.id}</sup>
+              </button>
+            )
+          )}
+        </div>
+        {(doc.inserts.length > 0 || doc.unplaced.length > 0) && (
+          <div className="fdExtra">
+            <b>{L("Changes not placed in the text", "টেক্সটে বসানো যায়নি এমন পরিবর্তন")}</b>
+            <p className="text-xs text-muted">{L("New clauses, or changes whose quoted wording was not found verbatim:", "নতুন ধারা, অথবা যেসব পরিবর্তনের উদ্ধৃতি হুবহু পাওয়া যায়নি:")}</p>
+            {[...doc.inserts, ...doc.unplaced].map((r) => (
+              <button key={r.id} className={`fdChange block pending ${selected === r.id ? "sel" : ""}`} onClick={() => onSelect(r.id)}>
+                <sup>{r.id}</sup> {sec(r.clauseId)}: <ins className="fdIns">{r.proposedText}</ins>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <aside className="fdSide card">
+        {sel ? (
+          <>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="scRuleId">{sel.id}</span>
+              <b className="text-white text-sm">{sec(sel.clauseId)} — {(bn && sel.sectionTitleBn) || sel.sectionTitle}</b>
+            </div>
+            <div className="fdReason"><span>{L("Other side's position", "অপর পক্ষের অবস্থান")}</span>{sel.chainOfThought.opposingCounselStance}</div>
+            <div className="fdReason"><span>{L("Business risk", "ব্যবসায়িক ঝুঁকি")}</span>{sel.chainOfThought.commercialRiskAssessment}</div>
+            <div className="fdReason"><span>{L("Legal rationale", "আইনি যুক্তি")}</span>{sel.chainOfThought.legalRationale}</div>
+            <div className="fdReason"><span>{L("What to say", "কী বলবেন")}</span>"{sel.chainOfThought.negotiationTalkingPoint}"</div>
+            <div className="flex gap-2 pt-1">
+              <button className={sel.accepted === true ? "primary text-xs" : "secondary text-xs"} onClick={() => onUpdateRedline(sel.id, sel.accepted === true ? null : true)}>
+                <Check size={13} /> {sel.accepted === true ? L("Accepted", "গৃহীত") : L("Accept", "গ্রহণ")}
+              </button>
+              <button className="secondary text-xs" onClick={() => { onUpdateRedline(sel.id, false); onSelect(null); }}>
+                <X size={13} /> {L("Reject", "প্রত্যাখ্যান")}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-muted">
+            {L(
+              `${placedCount} of ${redlines.filter((r) => r.accepted !== false).length} changes are shown in place. Click one to see why it is proposed. Rejected changes are hidden.`,
+              `${num(redlines.filter((r) => r.accepted !== false).length)}টি পরিবর্তনের মধ্যে ${num(placedCount)}টি জায়গামতো দেখানো হয়েছে। কেন প্রস্তাব করা হয়েছে দেখতে একটিতে ক্লিক করুন। প্রত্যাখ্যাত পরিবর্তন লুকানো থাকে।`
+            )}
+          </p>
+        )}
+      </aside>
+    </div>
+  );
+}

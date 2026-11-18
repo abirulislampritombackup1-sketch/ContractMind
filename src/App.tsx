@@ -45,6 +45,7 @@ import { indexDocument } from "./rag";
 import { analysisKey, getCachedAnalysis, saveAnalysis } from "./utils/analysisCache";
 import { isCustom, loadCustomPlaybooks, playbookProblems, saveCustomPlaybooks } from "./utils/playbookStore";
 import { openRiskReport } from "./utils/riskReport";
+import { pageAt } from "./utils/obligationsExport";
 import { Language } from "./i18n/translations";
 import { LangProvider, toBnDigits } from "./i18n/lang";
 import { SAMPLES_BN, playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
@@ -667,6 +668,15 @@ function ResultsWorkspace(props: {
   const { L, lang, result, tab, setTab } = props;
   const findings = useMemo(() => buildFindings(result, props.contractText), [result, props.contractText]);
   const locatedIds = useMemo(() => new Set(findings.filter((f) => f.start !== undefined).map((f) => f.id)), [findings]);
+  const obligationPages = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const f of findings) {
+      if (f.kind !== "obligation" || f.start === undefined) continue;
+      const page = pageAt(props.contractText, f.start);
+      if (page) out[f.id.replace(/^obl:/, "")] = page;
+    }
+    return out;
+  }, [findings, props.contractText]);
   const [selectedFinding, setSelectedFinding] = useState<string | null>(null);
   const showInContract = (id: string) => {
     setSelectedFinding(id);
@@ -752,14 +762,14 @@ function ResultsWorkspace(props: {
           props.contractText.startsWith("[Scanned PDF") ? (
             <>
               <div className="notice info"><FileText size={18} /><span>{L("This PDF is scanned, so the clean document export is based on the AI's quotes only.", "এই PDF স্ক্যান করা, তাই ক্লিন ডকুমেন্ট এক্সপোর্ট শুধুমাত্র এআই-এর উদ্ধৃতির উপর ভিত্তি করে।")}</span></div>
-              <RedlineViewer originalText={props.contractText} redlines={result.redlines} onUpdateRedline={props.onUpdateRedline} onAcceptAll={props.onAcceptAll} onRejectAll={props.onRejectAll} contractTitle={result.contractTitle} playbookName={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.redline(id))} findings={result.opposingFindings} />
+              <RedlineViewer originalText={props.contractText} redlines={result.redlines} onUpdateRedline={props.onUpdateRedline} onAcceptAll={props.onAcceptAll} onRejectAll={props.onRejectAll} contractTitle={result.contractTitle} playbookName={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.redline(id))} findings={result.opposingFindings} rationaleCheck={result.rationaleCheck} />
             </>
           ) : (
-            <RedlineViewer originalText={props.contractText} redlines={result.redlines} onUpdateRedline={props.onUpdateRedline} onAcceptAll={props.onAcceptAll} onRejectAll={props.onRejectAll} contractTitle={result.contractTitle} playbookName={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.redline(id))} findings={result.opposingFindings} />
+            <RedlineViewer originalText={props.contractText} redlines={result.redlines} onUpdateRedline={props.onUpdateRedline} onAcceptAll={props.onAcceptAll} onRejectAll={props.onRejectAll} contractTitle={result.contractTitle} playbookName={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.redline(id))} findings={result.opposingFindings} rationaleCheck={result.rationaleCheck} />
           )
         )}
         {tab === "Obligations" && (
-          <ObligationsView obligations={result.obligations} paymentMilestones={result.paymentMilestones} contractTitle={result.contractTitle} effectiveDate={result.effectiveDate} tableVision={result.tableVision} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.obligation(id))} />
+          <ObligationsView obligations={result.obligations} paymentMilestones={result.paymentMilestones} contractTitle={result.contractTitle} effectiveDate={result.effectiveDate} tableVision={result.tableVision} pages={obligationPages} playbook={result.playbookUsed} locatedIds={locatedIds} onShowInContract={(id) => showInContract(findingId.obligation(id))} />
         )}
         {tab === "Gold Standard" && <GoldStandardRAG comparisons={result.benchmarkComparisons} missing={result.missingProtections} search={result.goldSearch} />}
         {tab === "AI Counsel Chat" && (

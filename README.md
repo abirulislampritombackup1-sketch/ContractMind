@@ -47,6 +47,13 @@ Gold Standard search ──► Benchmark Agent     (in parallel)
 - **Milestone calendar** (Obligations → Milestones): the effective date is taken from the contract and can be changed. A milestone gets a date from a stated date, from "N days after the effective date / previous milestone", or from trigger text such as "within thirty (30) days of the Effective Date" (business days, weeks and months too). Event-based triggers ("upon acceptance") are listed as "depends on an event".
 - Timeline and month calendar views, colour-coded by party; **Add to calendar (.ics)** (all-day events with a 7-day reminder; calculated dates are marked as such) and **CSV** (UTF-8, opens in Excel) exports. Code: `src/utils/milestoneCalendar.ts`, `src/components/MilestoneCalendar.tsx`.
 
+## Redlines and the obligations JSON
+
+- **Every redline explains itself.** After the Dealmaker answers, any redline missing part of its chain-of-thought (other side's position, business risk, legal rationale, what to say) is sent back once to be completed; any still incomplete is removed. The Redlines tab says when this happened (`ensureRationales` in `src/services/gemini.ts`).
+- **Full document view** (Redlines → Full document): the whole contract with each change in place, deletions struck through and insertions underlined (dotted while only proposed). Clicking a change shows its reasoning with Accept / Reject. Changes whose quote cannot be found, and new clauses, are listed below instead of being guessed (`src/utils/redlineDocument.ts`).
+- **Redlined PDF**: the same document with numbered notes giving the reasoning for every change (print dialog → Save as PDF). The Word download with tracked changes is unchanged. The clean text export now uses the same tolerant placement, so accepted changes are applied even when the quote's spacing or quotes differ.
+- **Obligations JSON** follows a published JSON Schema (draft 2020-12, `src/schema/obligations.v1.json`, downloadable from the JSON view). The export is validated with `ajv` before it is shown or downloaded; download is blocked with the errors listed if it does not match. It includes `schemaVersion`, ISO dates, the contract page of each obligation (found from the clause's position in PDFs) and, for milestones, the due date and how it was found.
+
 ## Gold Standard RAG
 
 - `src/data/goldStandards.ts` + `goldStandardsMore.ts`: 30 gold clauses, one per common CUAD v1 category (indemnity, liability cap, termination, confidentiality, governing law, assignment, change of control, non-compete, renewal, price changes, audit, warranties, SLA, insurance, GDPR processing and transfers, exit, and more). The wording is ContractMind's own balanced drafting of common market positions, labelled as such.

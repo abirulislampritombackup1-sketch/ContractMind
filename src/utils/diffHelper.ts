@@ -1,6 +1,13 @@
 import { RedlineItem } from "../types";
+import { reconciledText } from "./redlineDocument";
 
+/** The contract with accepted changes applied (quotes are located tolerantly, see redlineDocument.ts). */
 export function generateReconciledDocument(originalText: string, redlines: RedlineItem[]): string {
+  return reconciledText(originalText, redlines);
+}
+
+/** Previous exact-match implementation, kept for reference. */
+export function generateReconciledDocumentExact(originalText: string, redlines: RedlineItem[]): string {
   let result = originalText;
   
   // Sort redlines by appearance in text if possible or apply accepted ones
