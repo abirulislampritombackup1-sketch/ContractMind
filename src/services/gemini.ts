@@ -2,6 +2,7 @@ import { ContractAnalysisResult, Playbook } from "../types";
 import { GOLD_STANDARD_CLAUSES } from "../data/goldStandards";
 import { Language } from "../i18n/translations";
 import { PLAYBOOKS_BN } from "../i18n/dataBn";
+import { documentParts } from "./docParts";
 import { SAMPLE_CONTRACTS } from "../data/sampleContracts";
 import { applyScoring, buildScoring } from "../utils/scoring";
 import { RAG_CONFIG } from "../rag/config";
@@ -42,7 +43,29 @@ const isSampleContract = (text: string) =>
  * Response (ok or not) and the model that produced it; throws only when every
  * attempt timed out or the network failed.
  */
-export async function callGemini(body: any): Promise<{ res: Response; model: string }> {
+// At most this many Gemini requests run at once, so a burst (4 agents + embeddings + chat)
+// does not hit the free tier's per-minute limit. Override with VITE_GEMINI_MAX_CONCURRENT.
+const MAX_CONCURRENT = Math.max(1, Number(import.meta.env.VITE_GEMINI_MAX_CONCURRENT) || 3);
+let active = 0;
+const waiting: (() => void)[] = [];
+async function withSlot<T>(run: () => Promise<T>): Promise<T> {
+  // A finished request hands its slot straight to the next waiting one.
+  if (active >= MAX_CONCURRENT) await new Promise<void>((r) => waiting.push(r));
+  else active++;
+  try {
+    return await run();
+  } finally {
+    const next = waiting.shift();
+    if (next) next();
+    else active--;
+  }
+}
+
+export function callGemini(body: any): Promise<{ res: Response; model: string }> {
+  return withSlot(() => callGeminiNow(body));
+}
+
+async function callGeminiNow(body: any): Promise<{ res: Response; model: string }> {
   let last: { res: Response; model: string } | null = null;
   let lastError = "";
   for (const { model, timeoutMs, delayMs } of ATTEMPTS) {
@@ -401,13 +424,11 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
       }
     }
 
-    // Whole-document part, encoded lazily and shared (only built if RAG is off or fails).
-    let fullDocPart: Promise<any> | null = null;
-    const getFullDocPart = () =>
-      (fullDocPart ??= (async () =>
-        !hasExtractedText && file && file.size < 14 * 1024 * 1024
-          ? { inline_data: { mime_type: file.type || "application/pdf", data: await toBase64(file) } }
-          : { text: `=== CONTRACT DOCUMENT TEXT ===\n${truncatedText}` })());
+    // Whole-document parts, built lazily and shared (only when RAG is off or fails).
+    // Large scanned PDFs become page images that fit Vercel's request size limit.
+    let fullDocParts: Promise<any[]> | null = null;
+    const getFullDocParts = () =>
+      (fullDocParts ??= documentParts({ file, text: truncatedText, hasText: hasExtractedText }));
 
     const modelsUsed = new Set<string>();
 
@@ -424,7 +445,7 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
     };
 
     const runAgentInner = async (a: AgentSpec): Promise<any> => {
-      let docPart: any;
+      let docParts: any[] | undefined;
       let mode: "rag" | "full" = "full";
       let sent: { n: number; total: number } | undefined;
       if (index) {
@@ -433,17 +454,17 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
             topK: Math.round(RAG_CONFIG.topK * a.retrieval.scale),
             perQuery: a.retrieval.perQuery,
           });
-          docPart = { text: `${ctx.block}\n\n${AGENT_RULES}` };
+          docParts = [{ text: `${ctx.block}\n\n${AGENT_RULES}` }];
           mode = "rag";
           sent = { n: ctx.chunks.length, total: ctx.totalChunks };
         } catch (e: any) {
           console.warn(`[ContractMind] Retrieval failed for ${a.key}, sending the whole document: ${e?.message || e}`);
         }
       }
-      docPart ??= await getFullDocPart();
+      docParts ??= await getFullDocParts();
       const instructions = [a.context, langBlock, `=== YOUR TASK ===\n${a.task}`, style].filter(Boolean).join("\n\n");
       const { res, model } = await callGemini({
-        contents: [{ role: "user", parts: [docPart, { text: instructions }] }],
+        contents: [{ role: "user", parts: [...docParts, { text: instructions }] }],
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: a.schema,
@@ -731,12 +752,11 @@ Base your answer exclusively on the provided contract text. CITE specific sectio
       }
     }
 
-    const docPart = file
-      ? { inline_data: { mime_type: file.type || "application/pdf", data: await toBase64(file) } }
-      : { text: `=== CONTRACT TEXT ===\n${contractText.slice(0, MAX_CHARS)}` };
+    const chatHasText = !!contractText.trim() && !contractText.startsWith("[Scanned PDF");
+    const docParts = await documentParts({ file, text: contractText.slice(0, MAX_CHARS), hasText: chatHasText, label: "CONTRACT TEXT" });
 
     const contents = [
-      { role: "user", parts: [docPart, { text: prompt }] },
+      { role: "user", parts: [...docParts, { text: prompt }] },
       { role: "model", parts: [{ text: `Understood. I am acting as ${persona}. I will answer all questions with precise clause references.` }] },
       ...history.map((h) => ({
         role: h.role === "user" ? "user" : "model",

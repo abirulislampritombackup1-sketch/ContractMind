@@ -35,7 +35,7 @@ let store: VectorStore | null = null;
 const getStore = () => (store ??= createStore());
 const inflight = new Map<string, Promise<DocIndex>>();
 
-async function sha256(data: ArrayBuffer | string): Promise<string> {
+export async function sha256(data: ArrayBuffer | string): Promise<string> {
   const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
   if (typeof crypto !== "undefined" && crypto.subtle) {
     const digest = await crypto.subtle.digest("SHA-256", bytes);

@@ -78,11 +78,14 @@ All optional, read at build/dev start (client-visible, so they need the `VITE_` 
 | `VITE_RAG_EMBED_BATCH` | `100` | Chunks per embedding request (max 100). |
 | `VITE_RAG_SUMMARY_BATCH_CHARS` | `12000` | Characters per group in chunk-by-chunk summaries. |
 | `VITE_RAG_MIN_PAGE_CHARS` | `40` | Pages with fewer characters are flagged as scanned. |
+| `VITE_GEMINI_MAX_CONCURRENT` | `3` | Most Gemini requests running at once (protects the free-tier rate limit). |
+| `VITE_SHOW_LEGAL_BD` | `true` | `false` hides the Land Guide and Case Helper tabs. |
 
 Changing the embedding model, dimension, chunk size or overlap re-indexes documents automatically (they are part of the cache key).
 
 ### Limits
 
-- Scanned PDFs (no extractable text) are still sent to Gemini as page images, as before; OCR-based indexing is not implemented.
+- Scanned PDFs (no extractable text) are read by Gemini directly. Files up to about 2.4 MB are sent as they are; larger ones are rendered to page images with pdf.js and shrunk to fit Vercel's 4.5 MB request limit (up to 60 pages; if pages still do not fit, only the first ones are sent and the AI is told). OCR-based indexing is not implemented.
+- Finished analyses are saved in the browser (IndexedDB) by document, playbook and language, so the same analysis opens instantly. **Re-run** always asks the AI again. Demo and incomplete results are not saved.
 - The index lives in the user's browser (IndexedDB); clearing site data re-indexes on next use.
 - Retrieval can miss a clause that does not resemble any query. Raise `VITE_RAG_TOP_K` if analyses report provisions as "Not Addressed" that exist in the document.

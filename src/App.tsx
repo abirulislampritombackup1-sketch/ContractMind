@@ -4,6 +4,7 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
+  Database,
   FileCheck2,
   FileEdit,
   FileSearch,
@@ -21,6 +22,7 @@ import {
   RotateCcw,
   Scale,
   ShieldCheck,
+  Sliders,
   Sparkles,
   Sun,
   UploadCloud,
@@ -35,12 +37,14 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import { ContractAnalysisResult, Playbook } from "./types";
 import { DEFAULT_PLAYBOOKS } from "./data/playbooks";
+import { SAMPLE_CONTRACTS, SampleContract } from "./data/sampleContracts";
 import { runContractIntelligence, AgentKey, AgentState } from "./services/gemini";
 import { RAG_CONFIG } from "./rag/config";
 import { indexDocument } from "./rag";
+import { analysisKey, getCachedAnalysis, saveAnalysis } from "./utils/analysisCache";
 import { Language } from "./i18n/translations";
 import { LangProvider, toBnDigits } from "./i18n/lang";
-import { playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
+import { SAMPLES_BN, playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
 import { PlaybookStudio } from "./components/PlaybookStudio";
 import { AnalysisOverview } from "./components/AnalysisOverview";
 import { RedlineViewer } from "./components/RedlineViewer";
@@ -57,6 +61,10 @@ import LandGuide from "./components/legal/LandGuide";
 import CaseHelper from "./components/legal/CaseHelper";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+// Land Guide and Case Helper (Bangladesh legal help). Set VITE_SHOW_LEGAL_BD=false to hide them,
+// for example in a build focused on contract review.
+const SHOW_LEGAL_BD = import.meta.env.VITE_SHOW_LEGAL_BD !== "false";
 
 type View = "review" | "playbooks" | "library" | "land" | "case";
 type ResultTab = "Analysis" | "Contract" | "Redlines" | "Obligations" | "Gold Standard" | "AI Counsel Chat";
@@ -162,6 +170,13 @@ export default function App() {
     }
   };
 
+  const handleLoadSample = (sample: SampleContract) => {
+    setFile(null);
+    setDocName(sample.name);
+    setContractText(sample.text);
+    setNotice(null);
+  };
+
   const clearDoc = () => {
     setFile(null);
     setDocName("");
@@ -169,9 +184,10 @@ export default function App() {
   };
 
   // ── Run the multi-agent analysis ───────────────────────────────────────────
-  const handleRunAnalysis = async () => {
+  // force = true skips the saved result (the Re-run button).
+  const handleRunAnalysis = async (force = false) => {
     if (!hasDoc) {
-      setNotice({ kind: "warn", text: L("Add a contract first — upload a file.", "প্রথমে একটি চুক্তি যোগ করুন — ফাইল আপলোড করুন।") });
+      setNotice({ kind: "warn", text: L("Add a contract first — upload a file or pick a sample.", "প্রথমে একটি চুক্তি যোগ করুন — ফাইল আপলোড করুন বা স্যাম্পল বেছে নিন।") });
       return;
     }
     setView("review");
@@ -180,14 +196,21 @@ export default function App() {
     setProgress(IDLE_PROGRESS);
     window.scrollTo({ top: 0, behavior: "smooth" });
     try {
-      const result = await runContractIntelligence(contractText, currentPlaybook, file || undefined, lang, (agent, state) =>
-        setProgress((p) => ({ ...p, [agent]: state }))
-      );
+      const key = await analysisKey({ file, text: contractText, playbook: currentPlaybook, lang }).catch(() => "");
+      const cached = !force && key ? await getCachedAnalysis(key) : null;
+      const result =
+        cached ??
+        (await runContractIntelligence(contractText, currentPlaybook, file || undefined, lang, (agent, state) =>
+          setProgress((p) => ({ ...p, [agent]: state }))
+        ));
+      if (!cached && key) saveAnalysis(key, result);
       setAnalysisResult(result);
       setAnalyzed({ text: contractText, file, name: docName });
       setShowResults(true);
       setResultTab("Analysis");
-      if (result.isDemo) {
+      if (cached) {
+        setNotice({ kind: "info", text: L("Showing your saved result for this contract and playbook. Click Re-run for a fresh analysis.", "এই চুক্তি ও প্লেবুকের সংরক্ষিত ফলাফল দেখানো হচ্ছে। নতুন বিশ্লেষণের জন্য আবার চালান চাপুন।") });
+      } else if (result.isDemo) {
         setNotice({ kind: "warn", text: L("Demo mode: the AI service could not be reached, so this is a pre-built offline analysis of the sample — not a live result.", "ডেমো মোড: এআই সার্ভিসে পৌঁছানো যায়নি, তাই স্যাম্পলের পূর্বনির্ধারিত অফলাইন বিশ্লেষণ দেখানো হচ্ছে।") });
       } else if (result.incompleteSections?.length) {
         setNotice({ kind: "warn", text: L(`Some sections could not be generated: ${result.incompleteSections.join(", ")}. Run the analysis again to retry.`, `কিছু অংশ তৈরি করা যায়নি: ${result.incompleteSections.join(", ")}। আবার চালিয়ে দেখুন।`) });
@@ -235,13 +258,22 @@ export default function App() {
             <button className={view === "review" ? "on" : ""} onClick={() => setView("review")}>
               <FileSearch size={15} /> <span className="lbl">{L("Review", "পর্যালোচনা")}</span>
             </button>
-            {/* Playbooks and Library pages are hidden from the menu; their views below still work if re-linked. */}
-            <button className={view === "land" ? "on" : ""} onClick={() => setView("land")}>
-              <Landmark size={15} /> <span className="lbl">{L("Land Guide", "জমি গাইড")}</span>
+            <button className={view === "playbooks" ? "on" : ""} onClick={() => setView("playbooks")}>
+              <Sliders size={15} /> <span className="lbl">{L("Playbooks", "প্লেবুক")}</span>
             </button>
-            <button className={view === "case" ? "on" : ""} onClick={() => setView("case")}>
-              <Gavel size={15} /> <span className="lbl">{L("Case Helper", "আইনি সহায়তা")}</span>
+            <button className={view === "library" ? "on" : ""} onClick={() => setView("library")}>
+              <Database size={15} /> <span className="lbl">{L("Library", "লাইব্রেরি")}</span>
             </button>
+            {SHOW_LEGAL_BD && (
+              <>
+                <button className={view === "land" ? "on" : ""} onClick={() => setView("land")}>
+                  <Landmark size={15} /> <span className="lbl">{L("Land Guide", "জমি গাইড")}</span>
+                </button>
+                <button className={view === "case" ? "on" : ""} onClick={() => setView("case")}>
+                  <Gavel size={15} /> <span className="lbl">{L("Case Helper", "আইনি সহায়তা")}</span>
+                </button>
+              </>
+            )}
           </nav>
 
           <div className="topActions">
@@ -286,7 +318,7 @@ export default function App() {
             file={analyzed.file}
             docName={analyzed.name}
             onNew={startNewReview}
-            onRerun={handleRunAnalysis}
+            onRerun={() => handleRunAnalysis(true)}
             canRerun={hasDoc}
             onUpdateRedline={(id, accepted) => updateRedlines((r) => (r.id === id ? { ...r, accepted } : r))}
             onAcceptAll={() => updateRedlines((r) => ({ ...r, accepted: true }))}
@@ -336,7 +368,7 @@ export default function App() {
                   <span className={`stepNum ${hasDoc ? "done" : ""}`}>{hasDoc ? <CheckCircle2 size={16} /> : 1}</span>
                   <div>
                     <h2>{L("Add your contract", "আপনার চুক্তি যোগ করুন")}</h2>
-                    <p>{L("Upload a PDF, Word or text file.", "PDF, Word বা টেক্সট ফাইল আপলোড করুন।")}</p>
+                    <p>{L("Upload a file, or try one of our sample contracts.", "ফাইল আপলোড করুন অথবা একটি স্যাম্পল চুক্তি ব্যবহার করুন।")}</p>
                   </div>
                 </div>
 
@@ -358,6 +390,21 @@ export default function App() {
                 ) : (
                   <Drop busy={busyExtracting} onFile={handleExtractFile} L={L} />
                 )}
+
+                <div className="divider">{L("or try a sample", "অথবা স্যাম্পল ব্যবহার করুন")}</div>
+                <div className="samples">
+                  {SAMPLE_CONTRACTS.map((s) => (
+                    <button
+                      key={s.id}
+                      className={`sample ${!file && contractText === s.text ? "on" : ""}`}
+                      onClick={() => handleLoadSample(s)}
+                    >
+                      <span className="tag brand">{lang === "bn" ? s.badge.replace("Dataset", "ডেটাসেট") : s.badge}</span>
+                      <b>{(lang === "bn" && SAMPLES_BN[s.id]?.name) || s.name}</b>
+                      <small>{(lang === "bn" && SAMPLES_BN[s.id]?.type) || s.type}</small>
+                    </button>
+                  ))}
+                </div>
               </section>
 
               {/* Step 2 + 3 */}
@@ -368,6 +415,9 @@ export default function App() {
                     <h2>{L("Choose a playbook", "একটি প্লেবুক বেছে নিন")}</h2>
                     <p>{L("The rules your contract is scored against.", "যে নিয়মে চুক্তিটি মূল্যায়ন হবে।")}</p>
                   </div>
+                  <button className="linkBtn right" onClick={() => setView("playbooks")}>
+                    <Sliders size={13} /> {L("Customize", "কাস্টমাইজ")}
+                  </button>
                 </div>
 
                 <div className="pbList">
@@ -394,7 +444,7 @@ export default function App() {
                       <h2>{L("Analyze", "বিশ্লেষণ করুন")}</h2>
                     </div>
                   </div>
-                  <button className="primary bigBtn" disabled={!hasDoc || busyExtracting} onClick={handleRunAnalysis}>
+                  <button className="primary bigBtn" disabled={!hasDoc || busyExtracting} onClick={() => handleRunAnalysis()}>
                     <Sparkles size={18} /> {L("Analyze contract", "চুক্তি বিশ্লেষণ করুন")}
                   </button>
                   <div className="runHint">
@@ -451,7 +501,7 @@ export default function App() {
         )}
 
         {/* ───────────── LAND GUIDE ───────────── */}
-        {view === "land" && (
+        {SHOW_LEGAL_BD && view === "land" && (
           <>
             <PageIntro
               title={L("Land Guide", "জমি গাইড")}
@@ -467,7 +517,7 @@ export default function App() {
         )}
 
         {/* ───────────── CASE HELPER ───────────── */}
-        {view === "case" && (
+        {SHOW_LEGAL_BD && view === "case" && (
           <>
             <PageIntro
               title={L("Case Helper", "আইনি সহায়তা")}
