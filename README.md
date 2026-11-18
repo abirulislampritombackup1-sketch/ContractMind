@@ -54,6 +54,31 @@ Gold Standard search ──► Benchmark Agent     (in parallel)
 - **Redlined PDF**: the same document with numbered notes giving the reasoning for every change (print dialog → Save as PDF). The Word download with tracked changes is unchanged. The clean text export now uses the same tolerant placement, so accepted changes are applied even when the quote's spacing or quotes differ.
 - **Obligations JSON** follows a published JSON Schema (draft 2020-12, `src/schema/obligations.v1.json`, downloadable from the JSON view). The export is validated with `ajv` before it is shown or downloaded; download is blocked with the errors listed if it does not match. It includes `schemaVersion`, ISO dates, the contract page of each obligation (found from the clause's position in PDFs) and, for milestones, the due date and how it was found.
 
+## Contract repository (Library)
+
+The Library searches **649 real contracts**: 498 from [CUAD v1](https://www.atticusprojectai.org/cuad) and 151 merger agreements from [MAUD](https://github.com/TheAtticusProject/maud), both by The Atticus Project under CC BY 4.0. (The previous Library showed 8 made-up entries and a "5,420 contracts" label; both are gone.)
+
+- **Ask in plain words**, e.g. "contracts with liability caps below $1M under Delaware law". Gemini turns the question into filters (cap amount, uncapped liability, governing law, clause types, contract type, dataset, notice period, party); without the AI a rule-based parser does the same. Filters show as chips you can remove.
+- **Ranking**: by meaning (embeddings) blended with keyword relevance (BM25) when the semantic index exists, by keywords otherwise; pure filter questions are sorted by the filtered value (e.g. smallest cap first).
+- **Answer**: a short plain-language summary of the matches that cites contract ids (links scroll to the card).
+- **Open in review** loads the full contract text (shipped gzip-compressed in `public/repository/texts/`).
+- Metadata comes from the datasets' expert labels plus pattern matching. CUAD's "Cap On Liability" label mostly marks clauses that exclude indirect damages; only 17 contracts state a dollar cap, and the Library says so rather than guessing.
+
+**Building the data** (`scripts/repository/`, Node, no extra packages):
+
+```bash
+# 1. Catalogue + texts from the downloaded datasets (no API calls)
+node scripts/repository/build-corpus.mjs --cuad <CUAD_v1 folder> --cuad-zip <CUAD_v1.zip> --maud <MAUD data folder>
+# 2. Semantic index (needs your key once; writes public/repository/vectors.bin + vectors.json)
+GEMINI_API_KEY=... node scripts/repository/embed-corpus.mjs
+# 3. Optional, not yet run: add SEC EDGAR material contracts (needs your contact for the SEC and a key)
+GEMINI_API_KEY=... node scripts/repository/fetch-edgar.mjs --user-agent "Your Name your@email" --count 4500
+```
+
+Until step 2 is run the Library shows "Keyword search (semantic index not built yet)".
+
+**Jurisdiction**: the GDPR gold clauses (processing terms, international transfers) count as required only for contracts under EU/UK law or that mention the GDPR; for other contracts they are compared only when a similar section exists.
+
 ## Gold Standard RAG
 
 - `src/data/goldStandards.ts` + `goldStandardsMore.ts`: 30 gold clauses, one per common CUAD v1 category (indemnity, liability cap, termination, confidentiality, governing law, assignment, change of control, non-compete, renewal, price changes, audit, warranties, SLA, insurance, GDPR processing and transfers, exit, and more). The wording is ContractMind's own balanced drafting of common market positions, labelled as such.

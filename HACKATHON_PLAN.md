@@ -154,6 +154,8 @@ Every item in the brief, where ContractMind stands today, and the step that fini
 
 ## Phase 6: Contract repository with natural-language search (about 3 days, the largest item)
 
+> **Status:** 6.1 built with CUAD v1 + MAUD (649 real contracts); EDGAR script written but not run (needs your SEC contact). 6.2 built: run `embed-corpus.mjs` once with your key to switch on semantic ranking. 6.3 built. 6.4: jurisdiction-aware GDPR clauses built; adding Open Legal Data documents still needs a download decision.
+
 ### 6.1 Build a real corpus of 5,000+ contracts (E5, D1–D3)
 - **New folder:** `scripts/repository/` (Node scripts run on your computer, not in the browser).
 - Sources:

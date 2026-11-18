@@ -623,7 +623,7 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
     const benchmarksP = (async () => {
       if (index) {
         try {
-          gold = await retrieveGold(index, GOLD_STANDARD_CLAUSES);
+          gold = await retrieveGold(index, goldForJurisdiction(truncatedText));
         } catch (e: any) {
           console.warn(`[ContractMind] Gold Standard search failed, using the whole library: ${e?.message || e}`);
         }
@@ -879,6 +879,20 @@ function sanitizeResult(raw: any, playbook: Playbook): ContractAnalysisResult {
 }
 
 // ── Pipeline helpers ─────────────────────────────────────────────────────────
+
+const EU_LAW = /laws? of (?:the )?(?:Republic of |Federal Republic of |Kingdom of )?(Ireland|Germany|France|the Netherlands|Netherlands|Belgium|Luxembourg|Spain|Italy|Portugal|Austria|Sweden|Denmark|Finland|Poland|Czech Republic|Greece|England|England and Wales|Scotland|the United Kingdom|United Kingdom)\b/i;
+
+/** True when the contract is under EU/UK law or deals with EU data protection. */
+export const isEuContract = (text: string) => EU_LAW.test(text) || /\bGDPR\b|General Data Protection Regulation|Regulation \(EU\) 2016\/679|UK GDPR|Data Protection Act 2018/i.test(text);
+
+/**
+ * Gold clauses with a jurisdiction (GDPR processing and transfers) are required only for
+ * EU/UK contracts; for others they are still compared when the contract has a similar section.
+ */
+export function goldForJurisdiction(text: string) {
+  const eu = isEuContract(text);
+  return GOLD_STANDARD_CLAUSES.map((g) => (g.jurisdiction ? { ...g, required: eu } : g));
+}
 
 const COT_KEYS = ["opposingCounselStance", "commercialRiskAssessment", "legalRationale", "negotiationTalkingPoint"] as const;
 const isBlank = (v: unknown) => typeof v !== "string" || !v.trim() || /^not provided/i.test(v.trim());

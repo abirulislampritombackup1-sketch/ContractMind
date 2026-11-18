@@ -501,7 +501,7 @@ export default function App() {
           <>
             <PageIntro
               title={L("Contract library", "চুক্তি লাইব্রেরি")}
-              desc={L("Search benchmark contracts by liability cap, indemnity type or governing law, and load any of them for review.", "দায়সীমা, ক্ষতিপূরণের ধরন বা প্রযোজ্য আইন দিয়ে চুক্তি খুঁজুন এবং পর্যালোচনার জন্য লোড করুন।")}
+              desc={L("Search real contracts from CUAD v1 and MAUD in plain words, by liability cap, governing law or clause, and open any of them for review.", "CUAD v1 ও MAUD-এর বাস্তব চুক্তি সহজ ভাষায় খুঁজুন: দায়সীমা, প্রযোজ্য আইন বা ধারা দিয়ে, এবং যেকোনোটি পর্যালোচনার জন্য খুলুন।")}
             />
             <RepositorySearch
               onLoadContractSnippet={(title: string, text: string) => {

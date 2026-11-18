@@ -217,16 +217,6 @@ export const SAMPLES_BN: Record<string, { name: string; type: string }> = {
   "sample-cuad-vendor-standard": { name: "CUAD বাছাই করা উচ্চ ঝুঁকির ভেন্ডর স্টেটমেন্ট অব ওয়ার্ক", type: "ভেন্ডর স্টেটমেন্ট অব ওয়ার্ক" },
 };
 
-export const REPO_BN: Record<string, { title: string; liabilityCap: string }> = {
-  "REP-EDGAR-001": { title: "মাস্টার ক্লাউড সার্ভিসেস ও SLA চুক্তি", liabilityCap: "$১,২৫০,০০০ (গত ১২ মাসের ফি)" },
-  "REP-EDGAR-002": { title: "গ্লোবাল এন্টারপ্রাইজ মাস্টার সার্ভিসেস চুক্তি", liabilityCap: "মেধাস্বত্ব ও গোপনীয়তায় সীমাহীন; সাধারণ দাবিতে ফি-র ২ গুণ" },
-  "REP-CUAD-104": { title: "উচ্চ ঝুঁকির একতরফা ভেন্ডর সেবা-শর্ত", liabilityCap: "$৫,০০০ বা শেষ ১ মাসের ফি (মারাত্মক কম সুরক্ষা)" },
-  "REP-MAUD-031": { title: "সম্পদ ক্রয় ও আর্নআউট মাইলস্টোন চুক্তি", liabilityCap: "$১৫,০০০,০০০ (ক্রয়মূল্যের ১০% এসক্রো জামানত)" },
-  "REP-EDGAR-005": { title: "সফটওয়্যার লাইসেন্স ও API ইন্টিগ্রেশন স্টেটমেন্ট অব ওয়ার্ক", liabilityCap: "$৫০০,০০০ (বার্ষিক লাইসেন্স মূল্যের ১ গুণ)" },
-  "REP-CUAD-052": { title: "ভেন্ডরের একতরফা মেধাস্বত্ব হস্তান্তর ও প্রতিযোগিতা-নিষেধ চুক্তি", liabilityCap: "ভেন্ডরের দায় শূন্য; গ্রাহকের দায় সীমাহীন" },
-  "REP-OPEN-219": { title: "আন্তঃসীমান্ত ডেটা প্রসেসিং ও ক্লাউড হোস্টিং চুক্তি", liabilityCap: "€২,০০০,০০০ (প্রত্যক্ষ ক্ষতি) / GDPR অনুচ্ছেদ ৮২" },
-  "REP-CUAD-088": { title: "মাইলস্টোন বিলিংসহ কনসালটিং সার্ভিসেস মাস্টার চুক্তি", liabilityCap: "$২,০০০,০০০ (মোট চুক্তিমূল্য)" },
-};
 
 /** Bangla view of a playbook (for display only). */
 export function playbookText(pb: Playbook, bn: boolean): PlaybookBn {

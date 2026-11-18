@@ -9,6 +9,8 @@ export interface EmbedDeps {
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   maxRetries?: number;
+  /** Vector size; defaults to VITE_RAG_EMBEDDING_DIM (the repository index uses 256). */
+  dim?: number;
 }
 
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
@@ -33,7 +35,7 @@ async function embedBatch(texts: string[], taskType: EmbedTaskType, deps: EmbedD
       model: `models/${model}`,
       content: { parts: [{ text }] },
       taskType,
-      outputDimensionality: RAG_CONFIG.embeddingDim,
+      outputDimensionality: deps.dim ?? RAG_CONFIG.embeddingDim,
     })),
   });
 

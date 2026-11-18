@@ -1,251 +1,276 @@
-import React, { useState, useMemo } from "react";
-import { RepositoryContract } from "../types";
-import { BENCHMARK_REPOSITORY_CONTRACTS } from "../data/repositoryContracts";
-import {
-  Search,
-  Database,
-  Filter,
-  ArrowUpRight,
-  ShieldAlert,
-  ShieldCheck,
-  Building2,
-  Calendar,
-  Sparkles,
-  Layers,
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, Building2, Calendar, Database, Scale, Search, Sparkles, X } from "lucide-react";
 import { useLang } from "../i18n/lang";
-import { REPO_BN } from "../i18n/dataBn";
+import { Corpus, CorpusContract, loadContractText, loadCorpus, loadVectors } from "../repository/corpus";
+import { CLAUSE_KEYS, describeFilters, ParsedQuery, RepoFilters } from "../repository/query";
+import { answerQuestion, searchRepository, SearchResult } from "../repository/search";
 
 interface RepositorySearchProps {
   onLoadContractSnippet: (title: string, text: string) => void;
 }
 
+const PAGE = 20;
+const usd = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
+// Example questions. The Bangla chips search with their English meaning (contracts and filters are in English).
+const EXAMPLES: [string, string][] = [
+  ["Contracts with liability caps below $1M", "$১০ লাখের কম দায়সীমার চুক্তি"],
+  ["Uncapped liability under Delaware law", "ডেলাওয়্যার আইনে সীমাহীন দায়"],
+  ["License agreements with termination for convenience", "ইচ্ছাধীন বাতিলসহ লাইসেন্স চুক্তি"],
+  ["Merger agreements with a termination fee", "টার্মিনেশন ফিসহ একীভূতকরণ চুক্তি"],
+  ["Distributor agreements with a non-compete under New York law", "নিউ ইয়র্ক আইনে প্রতিযোগিতা-নিষেধসহ ডিস্ট্রিবিউটর চুক্তি"],
+];
+
 export const RepositorySearch: React.FC<RepositorySearchProps> = ({ onLoadContractSnippet }) => {
-  const { L, bn, term } = useLang();
-  const [query, setQuery] = useState<string>("");
-  const [datasetFilter, setDatasetFilter] = useState<string>("All");
-  const [contractTypeFilter, setContractTypeFilter] = useState<string>("All");
+  const { L, bn, num } = useLang();
+  const [corpus, setCorpus] = useState<Corpus | null>(null);
+  const [hasVectors, setHasVectors] = useState<boolean | null>(null);
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<SearchResult | null>(null);
+  const [answer, setAnswer] = useState<{ text: string; busy: boolean } | null>(null);
+  const [shown, setShown] = useState(PAGE);
+  const [opening, setOpening] = useState<string | null>(null);
 
-  // The search matches English keywords, so Bangla chips carry an English query.
-  const promptSuggestions: { label: string; q: string }[] = [
-    { label: L("Find contracts with liability caps below $1M", "$১০ লাখের কম দায়সীমার চুক্তি"), q: "Find contracts with liability caps below $1M" },
-    { label: L("Show agreements with uncapped indemnification", "সীমাহীন ক্ষতিপূরণের চুক্তি"), q: "Show agreements with uncapped indemnification" },
-    { label: L("Filter contracts requiring 90+ days notice for termination", "বাতিলে ৯০+ দিনের নোটিশ লাগে এমন চুক্তি"), q: "Filter contracts requiring 90+ days notice for termination" },
-    { label: L("Search M&A agreements with earnout milestone tables", "আর্নআউট মাইলস্টোনসহ অধিগ্রহণ চুক্তি"), q: "Search M&A agreements with earnout milestone tables" },
-    { label: L("Cross-border contracts under Delaware or NY law", "ডেলাওয়্যার বা নিউ ইয়র্কের আইনে চুক্তি"), q: "Cross-border contracts under Delaware or NY law" },
-  ];
+  useEffect(() => {
+    loadCorpus().then(setCorpus).catch((e) => setError(e.message));
+    loadVectors().then((v) => setHasVectors(!!v));
+  }, []);
+  useEffect(() => {
+    if (corpus && !result) run("", { text: "", filters: {}, by: "rules" });
+  }, [corpus]);
 
-  const filteredContracts = useMemo(() => {
-    return BENCHMARK_REPOSITORY_CONTRACTS.filter((c) => {
-      if (datasetFilter !== "All" && c.dataset !== datasetFilter) return false;
-      if (contractTypeFilter !== "All" && c.contractType !== contractTypeFilter) return false;
-
-      if (!query.trim()) return true;
-
-      const q = query.toLowerCase();
-      const matchTitle = c.title.toLowerCase().includes(q);
-      const matchParties = c.parties.toLowerCase().includes(q);
-      const matchSnippet = c.snippet.toLowerCase().includes(q);
-      const matchCap = c.liabilityCap.toLowerCase().includes(q);
-      const matchLaw = c.governingLaw.toLowerCase().includes(q);
-
-      // Handle natural language semantic queries
-      if (q.includes("below $1m") || q.includes("under $1m") || q.includes("low cap")) {
-        return c.liabilityCap.includes("$5,000") || c.liabilityCap.includes("$500,000") || c.liabilityCap.includes("Zero");
+  async function run(q: string, parsed?: ParsedQuery) {
+    setBusy(true);
+    setAnswer(null);
+    setShown(PAGE);
+    try {
+      const r = await searchRepository(q, { parsed });
+      setResult(r);
+      if (q.trim() && !parsed && r.results.length) {
+        setAnswer({ text: "", busy: true });
+        answerQuestion(q, r.results, bn ? "bn" : "en")
+          .then((text) => setAnswer({ text, busy: false }))
+          .catch(() => setAnswer(null)); // no AI available: the filtered results still answer the question
       }
-      if (q.includes("uncapped") || q.includes("unilateral")) {
-        return c.indemnityType.includes("Unilateral") || c.liabilityCap.includes("Uncapped");
-      }
-      if (q.includes("earnout") || q.includes("milestone") || q.includes("m&a")) {
-        return c.contractType.includes("Asset Purchase") || c.snippet.includes("Milestone");
-      }
-      if (q.includes("delaware") || q.includes("new york") || q.includes("ny")) {
-        return c.governingLaw.toLowerCase().includes("delaware") || c.governingLaw.toLowerCase().includes("new york");
-      }
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      return matchTitle || matchParties || matchSnippet || matchCap || matchLaw;
+  const removeFilter = (key: keyof RepoFilters) => {
+    if (!result) return;
+    const filters = { ...result.parsed.filters };
+    delete filters[key];
+    if ((key === "capMaxUSD" || key === "capMinUSD") && filters.capMaxUSD === undefined && filters.capMinUSD === undefined) delete filters.hasDollarCap;
+    run(query, { ...result.parsed, filters });
+  };
+
+  const open = async (c: CorpusContract) => {
+    setOpening(c.id);
+    try {
+      onLoadContractSnippet(c.title, await loadContractText(c.id));
+    } catch (e: any) {
+      setError(e.message || String(e));
+    } finally {
+      setOpening(null);
+    }
+  };
+
+  const total = corpus?.contracts.length || 0;
+  const chips = result ? describeFilters(result.parsed.filters) : [];
+  const ids = useMemo(() => new Set(result?.results.map((r) => r.c.id)), [result]);
+  const withCitations = (text: string) =>
+    text.split(/(\[[A-Z]+-[\w-]+\])/g).map((part, i) => {
+      const m = part.match(/^\[([A-Z]+-[\w-]+)\]$/);
+      return m && ids.has(m[1]) ? (
+        <a key={i} href={`#${m[1]}`} className="text-brand font-semibold" onClick={(e) => { e.preventDefault(); document.getElementById(m[1])?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>
+          {part}
+        </a>
+      ) : (
+        <React.Fragment key={i}>{part}</React.Fragment>
+      );
     });
-  }, [query, datasetFilter, contractTypeFilter]);
+
+  const liability = (c: CorpusContract) =>
+    c.cap.amountUSD
+      ? L(`capped at ${usd(c.cap.amountUSD)}`, `সর্বোচ্চ ${usd(c.cap.amountUSD)}`)
+      : c.flags.uncappedLiability
+      ? L("uncapped for some claims", "কিছু দাবিতে সীমাহীন")
+      : c.cap.type === "fees"
+      ? L("capped by fees paid", "পরিশোধিত ফি পর্যন্ত সীমিত")
+      : c.cap.type === "exclusion"
+      ? L("indirect damages excluded, no dollar cap", "পরোক্ষ ক্ষতি বাদ, নির্দিষ্ট অঙ্কের সীমা নেই")
+      : c.dataset === "MAUD"
+      ? c.terminationFeeUSD
+        ? L(`termination fee about ${usd(c.terminationFeeUSD)}`, `টার্মিনেশন ফি প্রায় ${usd(c.terminationFeeUSD)}`)
+        : L("merger agreement (no liability cap)", "একীভূতকরণ চুক্তি (দায়সীমা নেই)")
+      : L("no cap clause labelled", "দায়সীমার ধারা চিহ্নিত নেই");
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-6 rounded-2xl border border-line">
         <div>
           <div className="flex items-center gap-2 text-brand text-xs font-bold tracking-wider uppercase mb-1">
-            <Database size={15} /> EDGAR • CUAD • MAUD • {L("Open Legal Data", "উন্মুক্ত আইনি ডেটা")}
+            <Database size={15} /> {corpus?.sources.filter((s) => s.count).map((s) => s.dataset).join(" • ") || "CUAD • MAUD"}
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">{L("Enterprise Repository Semantic Search", "চুক্তি ভান্ডারে খোঁজ")}</h2>
+          <h2 className="text-xl font-bold text-white tracking-tight">{L("Contract repository search", "চুক্তি ভান্ডারে খোঁজ")}</h2>
           <p className="text-muted text-sm mt-1">
-            {L("Query 5,000+ benchmark corporate contracts for specific liability caps, indemnification terms, and milestone clauses.", "৫,০০০+ নমুনা কর্পোরেট চুক্তিতে দায়সীমা, ক্ষতিপূরণ ও মাইলস্টোন ধারা খুঁজুন।")}
+            {L(
+              "Ask in plain words, e.g. about liability caps, governing law or clauses. The question is turned into filters, then results are ranked by meaning.",
+              "সহজ ভাষায় জিজ্ঞাসা করুন, যেমন দায়সীমা, প্রযোজ্য আইন বা ধারা নিয়ে। প্রশ্নটি ফিল্টারে রূপান্তরিত হয়, তারপর অর্থ অনুযায়ী ফলাফল সাজানো হয়।"
+            )}
           </p>
         </div>
-
-        <div className="flex items-center gap-2 text-xs text-muted bg-surface-solid px-4 py-2 rounded-xl border border-line">
-          <Database size={14} className="text-brand" />
-          <span><b>5,420</b> {L("Annotated Benchmark Contracts", "টি টীকাযুক্ত নমুনা চুক্তি")}</span>
+        <div className="text-xs text-muted bg-surface-solid px-4 py-2 rounded-xl border border-line space-y-0.5">
+          <div className="flex items-center gap-2">
+            <Database size={14} className="text-brand" />
+            <span><b className="text-white">{num(total.toLocaleString("en-US"))}</b> {L("real contracts", "টি বাস্তব চুক্তি")}</span>
+          </div>
+          <div className="text-[11px] text-faint">
+            {hasVectors === null ? "…" : hasVectors ? L("Semantic + keyword search", "অর্থভিত্তিক + কীওয়ার্ড সার্চ") : L("Keyword search (semantic index not built yet)", "কীওয়ার্ড সার্চ (অর্থভিত্তিক ইনডেক্স এখনও তৈরি হয়নি)")}
+          </div>
         </div>
       </div>
 
-      {/* Search Input & NLP Chips */}
+      {error && (
+        <div className="notice error" role="status">
+          <X size={16} />
+          <span>{error}</span>
+          <button onClick={() => setError("")} aria-label={L("Dismiss", "বন্ধ করুন")}><X size={14} /></button>
+        </div>
+      )}
+
       <div className="bg-surface p-6 rounded-2xl border border-line space-y-4">
-        <div className="relative">
-          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+        <form className="repoSearch" onSubmit={(e) => { e.preventDefault(); run(query); }}>
+          <Search size={18} className="text-muted" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={L("Ask anything (e.g. 'Find contracts with liability caps below $1M' or 'Show uncapped indemnity')...", "ইংরেজি কীওয়ার্ড দিয়ে খুঁজুন (যেমন Delaware, uncapped, earnout)...")}
-            className="w-full bg-[#060b16] border border-line-strong rounded-xl pl-11 pr-24 py-3.5 text-sm text-white focus:outline-none focus:border-brand"
+            placeholder={L("e.g. liability caps below $1M under Delaware law", "যেমন: liability caps below $1M under Delaware law")}
           />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-muted hover:text-white"
-            >
-              {L("Clear", "মুছুন")}
-            </button>
-          )}
-        </div>
+          <button type="submit" className="primary text-xs" disabled={busy || !corpus}>
+            {busy ? <span className="spinner" /> : <Search size={14} />} {L("Search", "খুঁজুন")}
+          </button>
+        </form>
 
-        {/* Quick Suggestion Chips */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-faint flex items-center gap-1">
-            <Sparkles size={12} className="text-brand" /> {L("Examples:", "উদাহরণ:")}
-          </span>
-          {promptSuggestions.map((s, idx) => (
+          <span className="text-xs text-faint flex items-center gap-1"><Sparkles size={12} className="text-brand" /> {L("Try:", "চেষ্টা করুন:")}</span>
+          {EXAMPLES.map(([en, bnText]) => (
             <button
-              key={idx}
-              onClick={() => setQuery(s.q)}
+              key={en}
+              onClick={() => { setQuery(en); run(en); }}
               className="text-xs px-3 py-1 rounded-full bg-surface-solid border border-line text-muted hover:text-white hover:border-brand transition-all"
             >
-              {s.label}
+              {L(en, bnText)}
             </button>
           ))}
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-line/60">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted font-medium">{L("Dataset:", "ডেটাসেট:")}</span>
-            {["All", "EDGAR (SEC)", "CUAD v1", "MAUD", "Open Legal Data"].map((ds) => (
-              <button
-                key={ds}
-                onClick={() => setDatasetFilter(ds)}
-                className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
-                  datasetFilter === ds
-                    ? "bg-brand/20 border-brand text-brand font-bold"
-                    : "bg-surface-solid border-line text-muted hover:text-white"
-                }`}
-              >
-                {ds === "All" ? L("All", "সব") : ds === "Open Legal Data" ? L(ds, "উন্মুক্ত আইনি ডেটা") : ds}
+        {chips.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-line/60">
+            <span className="text-xs text-muted">{result?.parsed.by === "ai" ? L("Filters understood by AI:", "এআই যে ফিল্টার বুঝেছে:") : L("Filters:", "ফিল্টার:")}</span>
+            {chips.map((ch) => (
+              <button key={ch.key} className="tag brand" onClick={() => removeFilter(ch.key)} title={L("Remove filter", "ফিল্টার সরান")}>
+                {ch.label} <X size={11} />
               </button>
             ))}
+            {result?.parsed.text && <span className="text-[11px] text-faint">{L("ranked by:", "সাজানোর ভিত্তি:")} “{result.parsed.text}”</span>}
           </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted font-medium">{L("Type:", "ধরন:")}</span>
-            <select
-              value={contractTypeFilter}
-              onChange={(e) => setContractTypeFilter(e.target.value)}
-              className="bg-surface-solid border border-line rounded-lg px-2.5 py-1 text-xs text-white"
-            >
-              <option value="All">{L("All Types", "সব ধরন")}</option>
-              <option value="SaaS & Cloud Agreement">{L("SaaS & Cloud", "SaaS ও ক্লাউড")}</option>
-              <option value="Master Services Agreement (MSA)">MSA</option>
-              <option value="Asset Purchase (M&A)">{L("M&A Asset Purchase", "সম্পদ ক্রয় (অধিগ্রহণ)")}</option>
-              <option value="Software License">{L("Software License", "সফটওয়্যার লাইসেন্স")}</option>
-            </select>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Contract Results List */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between text-xs text-muted px-1">
-          <span>{L(`Showing ${filteredContracts.length} matching contracts`, `${filteredContracts.length}টি চুক্তি পাওয়া গেছে`)}</span>
-          <span>{L("Ranked by relevance", "প্রাসঙ্গিকতা অনুযায়ী সাজানো")}</span>
+      {answer && (
+        <div className="bg-surface p-5 rounded-2xl border border-brand/30 space-y-2">
+          <div className="text-xs font-bold text-brand flex items-center gap-1.5"><Sparkles size={13} /> {L("Answer", "উত্তর")}</div>
+          {answer.busy ? <p className="text-sm text-muted m-0">{L("Reading the matches…", "ফলাফল পড়া হচ্ছে…")}</p> : <p className="text-sm text-white leading-relaxed m-0">{withCitations(answer.text)}</p>}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-xs text-muted px-1 flex-wrap gap-2">
+          <span>
+            {result
+              ? L(`${result.results.length.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} contracts match`, `${num(total)}টির মধ্যে ${num(result.results.length)}টি চুক্তি মিলেছে`)
+              : L("Loading the repository…", "ভান্ডার লোড হচ্ছে…")}
+          </span>
+          {result && (
+            <span>
+              {result.semantic ? L("Ranked by meaning and keywords", "অর্থ ও কীওয়ার্ড অনুযায়ী সাজানো") : result.parsed.text ? L("Ranked by keywords", "কীওয়ার্ড অনুযায়ী সাজানো") : L("Sorted by the filter", "ফিল্টার অনুযায়ী সাজানো")}
+            </span>
+          )}
         </div>
 
-        {filteredContracts.map((c) => (
-          <div
-            key={c.id}
-            className="p-5 rounded-2xl bg-surface border border-line hover:border-line-strong transition-all space-y-3"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-line">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded bg-brand/15 text-brand">
-                  {c.id}
-                </span>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-surface-solid border border-line text-brand-2">
-                  {c.dataset === "Open Legal Data" ? L(c.dataset, "উন্মুক্ত আইনি ডেটা") : c.dataset}
-                </span>
-                <h3 className="font-bold text-white text-base">{(bn && REPO_BN[c.id]?.title) || c.title}</h3>
+        {result?.results.slice(0, shown).map(({ c, semantic }) => (
+          <div key={c.id} id={c.id} className="p-5 rounded-2xl bg-surface border border-line hover:border-line-strong transition-all space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded bg-brand/15 text-brand">{c.id}</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-surface-solid border border-line text-brand-2">{c.dataset}</span>
+                <h3 className="font-bold text-white text-base" style={{ overflowWrap: "anywhere" }}>{c.title}</h3>
               </div>
-
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                    c.riskScore >= 70
-                      ? "bg-danger/20 text-danger"
-                      : c.riskScore >= 40
-                      ? "bg-warn/20 text-warn"
-                      : "bg-brand/20 text-brand"
-                  }`}
-                >
-                  {L("Risk Score:", "ঝুঁকি স্কোর:")} {c.riskScore}/100
-                </span>
-              </div>
+              {semantic !== undefined && <span className="simBadge">{L("match", "মিল")} {num(Math.round(semantic * 100))}%</span>}
             </div>
 
-            {/* Parties & Metadata */}
-            <div className="flex items-center gap-4 text-xs text-muted flex-wrap">
-              <span className="flex items-center gap-1.5 text-white/90">
-                <Building2 size={13} className="text-brand" /> {c.parties}
-              </span>
-              <span>•</span>
-              <span>{term(c.contractType)}</span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <Calendar size={13} className="text-faint" /> {c.date}
-              </span>
-              <span>•</span>
-              <span>{L("Law:", "আইন:")} <b>{term(c.governingLaw)}</b></span>
+            <div className="flex items-center gap-x-4 gap-y-1 text-xs text-muted flex-wrap">
+              {c.parties.length > 0 && (
+                <span className="flex items-center gap-1.5 text-white/90" style={{ overflowWrap: "anywhere" }}>
+                  <Building2 size={13} className="text-brand" /> {c.parties.slice(0, 3).join(" / ")}
+                </span>
+              )}
+              <span>{c.contractType}</span>
+              {c.date && <span className="flex items-center gap-1"><Calendar size={13} className="text-faint" /> {c.date}</span>}
+              <span className="flex items-center gap-1"><Scale size={13} className="text-faint" /> {L("Law:", "আইন:")} <b>{c.governingLaw || L("not found", "পাওয়া যায়নি")}</b></span>
             </div>
 
-            {/* Snippet */}
-            <div className="p-3 rounded-xl bg-surface-solid/70 border border-line text-xs text-muted font-mono leading-relaxed">
-              "{c.snippet}"
+            <div className="p-3 rounded-xl bg-surface-solid/70 border border-line text-xs leading-relaxed">
+              <span className="text-faint">{L("Liability: ", "দায়: ")}</span>
+              <b className="text-brand">{liability(c)}</b>
+              {c.cap.text && <div className="text-muted font-mono mt-1" style={{ overflowWrap: "anywhere" }}>“{c.cap.text.slice(0, 280)}{c.cap.text.length > 280 ? "…" : ""}”</div>}
+              {c.dealPoints && <div className="text-muted mt-1">{c.dealPoints}</div>}
             </div>
 
-            {/* Liability Cap & Key Obligations Tag */}
-            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div>
-                  <span className="text-faint text-[11px]">{L("Liability Cap: ", "দায়সীমা: ")}</span>
-                  <span className="text-brand font-bold">{(bn && REPO_BN[c.id]?.liabilityCap) || c.liabilityCap}</span>
-                </div>
-                <div>
-                  <span className="text-faint text-[11px]">{L("Indemnity: ", "ক্ষতিপূরণ: ")}</span>
-                  <span className="text-white font-medium">{term(c.indemnityType)}</span>
-                </div>
-                <div>
-                  <span className="text-faint text-[11px]">{L("Obligations: ", "বাধ্যবাধকতা: ")}</span>
-                  <span className="text-muted">{c.keyObligationsCount} {L("annotated", "টি চিহ্নিত")}</span>
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {Object.entries(c.flags)
+                  .filter(([k, v]) => v && CLAUSE_KEYS[k] && k !== "capOnLiability")
+                  .slice(0, 6)
+                  .map(([k]) => <span key={k} className="tag neutral">{CLAUSE_KEYS[k]}</span>)}
               </div>
-
-              <button
-                onClick={() => onLoadContractSnippet(c.title, c.snippet)}
-                className="secondary text-xs flex items-center gap-1 self-end sm:self-auto"
-              >
-                {L("Inspect in Review Workspace", "পর্যালোচনার জন্য খুলুন")} <ArrowUpRight size={13} />
+              <button onClick={() => open(c)} className="secondary text-xs flex items-center gap-1 self-end sm:self-auto" disabled={opening === c.id}>
+                {opening === c.id ? <span className="spinner dark" /> : null} {L("Open in review", "পর্যালোচনায় খুলুন")} <ArrowUpRight size={13} />
               </button>
             </div>
+            <div className="text-[10.5px] text-faint" style={{ overflowWrap: "anywhere" }}>{L("Source:", "উৎস:")} {c.source}</div>
           </div>
         ))}
+
+        {result && result.results.length > shown && (
+          <button className="secondary w-full justify-center" onClick={() => setShown(shown + PAGE)}>
+            {L(`Show more (${result.results.length - shown} left)`, `আরও দেখুন (${num(result.results.length - shown)}টি বাকি)`)}
+          </button>
+        )}
+        {result && !result.results.length && (
+          <p className="text-sm text-muted px-1">{L("No contracts match. Remove a filter above or rephrase.", "কোনো চুক্তি মেলেনি। উপরের একটি ফিল্টার সরান বা অন্যভাবে লিখুন।")}</p>
+        )}
       </div>
+
+      {corpus && (
+        <p className="text-[11px] text-faint px-1">
+          {L("Data: ", "ডেটা: ")}
+          {corpus.sources.filter((s) => s.count).map((s, i) => (
+            <span key={s.dataset}>
+              {i > 0 && " · "}
+              <a href={s.url} target="_blank" rel="noreferrer" className="underline">{s.dataset}</a> ({num(s.count)}, {s.by}, {s.license})
+            </span>
+          ))}
+          . {L("Metadata comes from the datasets' expert labels plus pattern matching, and may be incomplete.", "মেটাডেটা ডেটাসেটের বিশেষজ্ঞ লেবেল ও প্যাটার্ন মিলিয়ে নেওয়া, অসম্পূর্ণ হতে পারে।")}
+        </p>
+      )}
     </div>
   );
 };
-
