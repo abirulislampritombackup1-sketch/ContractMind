@@ -188,6 +188,8 @@ Every item in the brief, where ContractMind stands today, and the step that fini
 
 ## Phase 7: Real data, evaluation and submission (about 2 days)
 
+> **Status:** 7.1 built (three real SEC-filed samples from CUAD and MAUD). 7.2 built: the keyword baseline is measured (70.7% F1); run `GEMINI_API_KEY=... node scripts/eval/cuad-eval.mjs` for the AI numbers. 7.3: 71 tests. 7.4: README, How it works page, docs/DEMO.md and docs/PITCH.md written; recording the video is yours.
+
 ### 7.1 Real sample contracts (D1)
 - Replace the three synthetic samples with three real public contracts: one EDGAR SaaS/MSA, one MAUD merger agreement, one CUAD agreement with a payment table. Show the source link on each sample.
 

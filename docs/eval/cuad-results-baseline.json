@@ -1,0 +1,286 @@
+{
+  "method": "keyword baseline (regular expressions, no AI)",
+  "contracts": 40,
+  "seed": 7,
+  "ranAt": "2026-11-18T19:33:58.280Z",
+  "overall": {
+    "precision": 77.2,
+    "recall": 65.2,
+    "f1": 70.7
+  },
+  "governingLawAccuracy": 66.7,
+  "quoteVerbatimRate": 100,
+  "tokens": 0,
+  "categories": [
+    {
+      "key": "capOnLiability",
+      "category": "Cap On Liability",
+      "labelled": 22,
+      "precision": 94.4,
+      "recall": 77.3,
+      "f1": 85,
+      "accuracy": 85
+    },
+    {
+      "key": "uncappedLiability",
+      "category": "Uncapped Liability",
+      "labelled": 10,
+      "precision": 57.1,
+      "recall": 40,
+      "f1": 47.1,
+      "accuracy": 77.5
+    },
+    {
+      "key": "terminationForConvenience",
+      "category": "Termination For Convenience",
+      "labelled": 11,
+      "precision": 50,
+      "recall": 45.5,
+      "f1": 47.6,
+      "accuracy": 72.5
+    },
+    {
+      "key": "nonCompete",
+      "category": "Non-Compete",
+      "labelled": 11,
+      "precision": 100,
+      "recall": 36.4,
+      "f1": 53.3,
+      "accuracy": 82.5
+    },
+    {
+      "key": "exclusivity",
+      "category": "Exclusivity",
+      "labelled": 15,
+      "precision": 57.9,
+      "recall": 73.3,
+      "f1": 64.7,
+      "accuracy": 70
+    },
+    {
+      "key": "changeOfControl",
+      "category": "Change Of Control",
+      "labelled": 11,
+      "precision": 60,
+      "recall": 54.5,
+      "f1": 57.1,
+      "accuracy": 77.5
+    },
+    {
+      "key": "antiAssignment",
+      "category": "Anti-Assignment",
+      "labelled": 30,
+      "precision": 100,
+      "recall": 73.3,
+      "f1": 84.6,
+      "accuracy": 80
+    },
+    {
+      "key": "auditRights",
+      "category": "Audit Rights",
+      "labelled": 15,
+      "precision": 100,
+      "recall": 73.3,
+      "f1": 84.6,
+      "accuracy": 90
+    },
+    {
+      "key": "ipAssignment",
+      "category": "Ip Ownership Assignment",
+      "labelled": 16,
+      "precision": 87.5,
+      "recall": 43.8,
+      "f1": 58.3,
+      "accuracy": 75
+    },
+    {
+      "key": "insurance",
+      "category": "Insurance",
+      "labelled": 17,
+      "precision": 68,
+      "recall": 100,
+      "f1": 81,
+      "accuracy": 80
+    },
+    {
+      "key": "sourceCodeEscrow",
+      "category": "Source Code Escrow",
+      "labelled": 1,
+      "precision": 0,
+      "recall": 0,
+      "f1": null,
+      "accuracy": 95
+    },
+    {
+      "key": "mostFavoredNation",
+      "category": "Most Favored Nation",
+      "labelled": 2,
+      "precision": 100,
+      "recall": 50,
+      "f1": 66.7,
+      "accuracy": 97.5
+    }
+  ],
+  "sample": [
+    {
+      "id": "CUAD-0124",
+      "title": "REAL ESTATE EDUCATION TRAINING PROGRAM DEVELOPMENT AGREEMENT"
+    },
+    {
+      "id": "CUAD-0464",
+      "title": "Amended and Restated Unconditional Capital Maintenance Agreement"
+    },
+    {
+      "id": "CUAD-0425",
+      "title": "FRANCHISE AGREEMENT"
+    },
+    {
+      "id": "CUAD-0396",
+      "title": "DISTRIBUTOR AGREEMENT"
+    },
+    {
+      "id": "CUAD-0445",
+      "title": "Manufacturing Agreement"
+    },
+    {
+      "id": "CUAD-0386",
+      "title": "INTELLECTUAL PROPERTY AGREEMENT"
+    },
+    {
+      "id": "CUAD-0392",
+      "title": "INTELLECTUAL PROPERTY AGREEMENT"
+    },
+    {
+      "id": "CUAD-0440",
+      "title": "Manufacturing and Supply Agreement"
+    },
+    {
+      "id": "CUAD-0438",
+      "title": "Amendment #3 to the Manufacturing Agreemen"
+    },
+    {
+      "id": "CUAD-0393",
+      "title": "INTELLECTUAL PROPERTY AGREEMENT"
+    },
+    {
+      "id": "CUAD-0414",
+      "title": "ENDORSEMENT AGREEMENT"
+    },
+    {
+      "id": "CUAD-0416",
+      "title": "ENDORSEMENT AGREEMENT"
+    },
+    {
+      "id": "CUAD-0290",
+      "title": "PROMOTION AGREEMENT"
+    },
+    {
+      "id": "CUAD-0369",
+      "title": "Collaboration Agreement"
+    },
+    {
+      "id": "CUAD-0420",
+      "title": "LICENSE, DEVELOPMENT AND COMMERCIALIZATION AGREEMENT"
+    },
+    {
+      "id": "CUAD-0380",
+      "title": "Cooperation Agreement"
+    },
+    {
+      "id": "CUAD-0275",
+      "title": "Promotion Agreement"
+    },
+    {
+      "id": "CUAD-0406",
+      "title": "DISTRIBUTOR AGREEMENT"
+    },
+    {
+      "id": "CUAD-0276",
+      "title": "PROMOTION AGREEMENT"
+    },
+    {
+      "id": "CUAD-0407",
+      "title": "DISTRIBUTOR AGREEMENT"
+    },
+    {
+      "id": "CUAD-0253",
+      "title": "Software License, Customization and Maintenance Agreement"
+    },
+    {
+      "id": "CUAD-0284",
+      "title": "JOINT FILING AGREEMENT"
+    },
+    {
+      "id": "CUAD-0201",
+      "title": "SERVICES AGREEMENT"
+    },
+    {
+      "id": "CUAD-0098",
+      "title": "NETWORK AFFILIATE AGREEMENT"
+    },
+    {
+      "id": "CUAD-0120",
+      "title": "Consulting and Product Development Agreement"
+    },
+    {
+      "id": "CUAD-0436",
+      "title": "WEB HOSTING AGREEMENT"
+    },
+    {
+      "id": "CUAD-0067",
+      "title": "SPONSORSHIP AGREEMENT"
+    },
+    {
+      "id": "CUAD-0329",
+      "title": "AMENDMENT AND TERMINATION OF JOINT VENTURE AGREEMENT"
+    },
+    {
+      "id": "CUAD-0111",
+      "title": "ENDORSEMENT AGREEMENT"
+    },
+    {
+      "id": "CUAD-0394",
+      "title": "Distributor Agreement Distributor Agreement"
+    },
+    {
+      "id": "CUAD-0107",
+      "title": "ENDORSEMENT AGREEMENT"
+    },
+    {
+      "id": "CUAD-0447",
+      "title": "SUPPORT AND MAINTENANCE AGREEMENT"
+    },
+    {
+      "id": "CUAD-0079",
+      "title": "TRANSPORTATION SERVICE AGREEMENT Contract Identification FT18150"
+    },
+    {
+      "id": "CUAD-0115",
+      "title": "LICENSE, DEVELOPMENT AND COMMERCIALIZATION AGREEMENT"
+    },
+    {
+      "id": "CUAD-0076",
+      "title": "TRADEMARK LICENSE AGREEMENT"
+    },
+    {
+      "id": "CUAD-0487",
+      "title": "SPONSORSHIP AGREEMENT"
+    },
+    {
+      "id": "CUAD-0453",
+      "title": "SOFTWARE LICENSE AND MAINTENANCE AGREEMENT"
+    },
+    {
+      "id": "CUAD-0100",
+      "title": "Affiliate Program / Premium Affiliate Management General Terms and Conditions"
+    },
+    {
+      "id": "CUAD-0066",
+      "title": "EVENT SPONSORSHIP AGREEMENT"
+    },
+    {
+      "id": "CUAD-0261",
+      "title": "SUPPLY AGREEMENT"
+    }
+  ]
+}

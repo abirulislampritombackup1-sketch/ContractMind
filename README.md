@@ -1,7 +1,62 @@
 # ContractMind
 
-AI contract review: risk scoring against a playbook, redlines, obligations, gold-standard benchmarking and a counsel chat.
-React + Vite + TypeScript; Gemini is called through a server-side proxy so the API key never reaches the browser.
+**AI-native contract review.** Upload a raw contract PDF and ContractMind scores its risk against a playbook you control, writes redlines that explain themselves, extracts obligations and payment milestones as validated JSON and a calendar, benchmarks every clause against a Gold Standard library, and searches 650 real contracts in plain language. English and Bangla.
+
+React + Vite + TypeScript on Vercel. Gemini is called through a server-side proxy (`api/gemini.ts`), so the API key never reaches the browser.
+
+## What it does, mapped to the hackathon brief
+
+| Brief | ContractMind | Where |
+| --- | --- | --- |
+| Ingest a raw contract PDF | pdf.js → Markdown with headings, tables and page numbers; scanned or large PDFs go to Gemini as page images sized for Vercel's 4.5 MB limit | Review |
+| Risk scoring on **custom** playbooks | Gemini judges every playbook rule with a verbatim quote; the 0-100 score is calculated in code from rule weights; playbooks are created, edited and shared as JSON | Playbooks, Overview → scorecard |
+| Structured JSON of obligations | Validated with `ajv` against a published JSON Schema (draft 2020-12) before download | Obligations → Structured JSON |
+| Redlined version of the document | Word file with tracked changes and comments, redlined PDF, full document view | Redlines |
+| Multi-agent system | Six agents; Risk Auditor → Opposing Counsel → Commercial Dealmaker hand off, Obligations, Table Vision and Benchmarks run in parallel | Analysing screen, Overview |
+| RAG | Heading-aware chunks, `gemini-embedding-001`, IndexedDB; each agent reads only what it retrieves | Every analysis |
+| Opposing counsel + counter-offers | Opposing Counsel lists one-sided clauses (indemnity first); the Dealmaker answers each, and each redline names the finding it answers | Redlines |
+| Gold Standard RAG: deviations, missing protections | 30 gold clauses matched to contract sections by embedding similarity; missing required protections flagged in code, confirmed by the agent; GDPR clauses required for EU/UK contracts | Benchmarks |
+| Vision agent → payment milestone calendar | Table pages read as images (nested phases kept), merged with text milestones, dates calculated, `.ics` and CSV export | Obligations → Milestones |
+| Chain-of-thought for every redline | Other side's position, business risk, legal rationale and what to say; incomplete ones are completed or removed | Redlines |
+| Natural-language search over a repository | 650 real contracts (CUAD v1 + MAUD); questions become filters, ranked by meaning + BM25, with a cited answer | Library |
+| Data sources | CUAD v1 and MAUD (The Atticus Project, CC BY 4.0), which are SEC EDGAR filings; EDGAR fetch script ready | Library, samples |
+
+The **How it works** page in the app shows the same table and the accuracy results.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  U[PDF / DOCX / TXT] --> X[pdf.js → Markdown<br/>headings · tables · pages]
+  X --> C[Heading-aware chunks] --> E[gemini-embedding-001] --> I[(IndexedDB index)]
+  I --> R[Risk Auditor] --> O[Opposing Counsel] --> D[Commercial Dealmaker]
+  I --> B[Obligation Extractor]
+  X -->|table pages as images| T[Table Vision]
+  G[(30 Gold Standard clauses)] --> S[Similarity search] --> K[Benchmark Agent]
+  I --> S
+  R --> SC[Scorecard: score computed in code]
+  D --> RL[Redlines → Word · PDF · full document]
+  B --> J[Obligations JSON · schema-validated]
+  T --> M[Milestone calendar · .ics · CSV]
+  K --> MP[Deviations · missing protections]
+  L[(650 CUAD + MAUD contracts)] --> Q[NL query → filters + semantic/BM25 ranking] --> A[Cited answer]
+```
+
+All model calls go through `/api/gemini` (key server-side), with a primary/fallback model, at most 3 requests at once, and token usage logged per call (`__contractmindTokens.totals()` in the console).
+
+## Accuracy
+
+`scripts/eval/cuad-eval.mjs` compares clause detection with CUAD's expert labels on 40 contracts (12 clause types), checks governing law, and checks that every evidence quote exists verbatim in the contract. Results go to `docs/eval/` and appear on the How it works page.
+
+| Method | F1 (12 clause types) | Governing law | Quotes verbatim |
+| --- | --- | --- | --- |
+| Keyword baseline (no AI) | 70.7% | 66.7% | 100% |
+| Gemini | run `GEMINI_API_KEY=... node scripts/eval/cuad-eval.mjs` | | |
+
+## Demo and pitch
+
+- [docs/DEMO.md](docs/DEMO.md): a 3-minute demo script.
+- [docs/PITCH.md](docs/PITCH.md): problem, solution and comparison with Ironclad, Luminance, Spellbook, Kira and LawGeex.
 
 ## Setup
 
@@ -17,7 +72,7 @@ GEMINI_API_KEY=your-key-here
 
 ```bash
 pnpm dev        # http://localhost:5173
-pnpm test       # unit tests (chunker, retriever, embedder, converter, summariser)
+pnpm test       # unit tests (RAG, scoring, playbooks, gold search, redlines, calendar, JSON schema, repository search)
 pnpm build
 ```
 
@@ -56,12 +111,13 @@ Gold Standard search ──► Benchmark Agent     (in parallel)
 
 ## Contract repository (Library)
 
-The Library searches **649 real contracts**: 498 from [CUAD v1](https://www.atticusprojectai.org/cuad) and 151 merger agreements from [MAUD](https://github.com/TheAtticusProject/maud), both by The Atticus Project under CC BY 4.0. (The previous Library showed 8 made-up entries and a "5,420 contracts" label; both are gone.)
+The Library searches **650 real contracts**: 498 from [CUAD v1](https://www.atticusprojectai.org/cuad) and 152 merger agreements from [MAUD](https://github.com/TheAtticusProject/maud), both by The Atticus Project under CC BY 4.0. (The previous Library showed 8 made-up entries and a "5,420 contracts" label; both are gone.)
 
 - **Ask in plain words**, e.g. "contracts with liability caps below $1M under Delaware law". Gemini turns the question into filters (cap amount, uncapped liability, governing law, clause types, contract type, dataset, notice period, party); without the AI a rule-based parser does the same. Filters show as chips you can remove.
 - **Ranking**: by meaning (embeddings) blended with keyword relevance (BM25) when the semantic index exists, by keywords otherwise; pure filter questions are sorted by the filtered value (e.g. smallest cap first).
 - **Answer**: a short plain-language summary of the matches that cites contract ids (links scroll to the card).
 - **Open in review** loads the full contract text (shipped gzip-compressed in `public/repository/texts/`).
+- Metadata comes from the datasets' expert labels plus pattern matching. MAUD's own file list numbers deals differently from its text files, so merger titles and parties are read from each agreement's preamble (120 of 152 named; the rest are titled by MAUD number).
 - Metadata comes from the datasets' expert labels plus pattern matching. CUAD's "Cap On Liability" label mostly marks clauses that exclude indirect damages; only 17 contracts state a dollar cap, and the Library says so rather than guessing.
 
 **Building the data** (`scripts/repository/`, Node, no extra packages):

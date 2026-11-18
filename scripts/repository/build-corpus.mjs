@@ -6,7 +6,7 @@
 //
 //   --cuad      folder containing master_clauses.csv and full_contract_txt/
 //   --cuad-zip  optional: the original CUAD_v1.zip, used only to read each PDF's folder (contract type)
-//   --maud      folder containing raw/main.csv and contracts/*.txt
+//   --maud      folder containing contracts/*.txt and MAUD_train/dev/test.csv
 //
 // Writes:
 //   public/repository/corpus.json        one record per contract (metadata + key-terms summary)
@@ -220,28 +220,89 @@ function buildCuad(dir, zip) {
 }
 
 // ── MAUD ─────────────────────────────────────────────────────────────────────
+// MAUD's raw/main.csv names the deals, but its anonymised numbering does not match the
+// contracts/*.txt files. So parties and date are read from each agreement's own preamble,
+// and deal points come from the train/dev/test files, which use the same numbering as the texts.
+// "by and among Microsoft Corporation, a Washington corporation ("Parent"), Big Sky Merger
+// Sub Inc., ... ("Merger Sub"), and Nuance Communications, Inc., ... (the "Company")"
+const PARTY = /(?:^|,\s*|\band\s+|\bamong\s+|\bbetween\s+)([A-Z][A-Za-z0-9&.'’\- ]{1,80}?(?:,\s*(?:Inc|Ltd|L\.?L\.?C|Corp|N\.V|S\.A|plc|L\.P)\.?)?),\s+(?:an?\s+|a\s+)[^()]{3,160}?\((?:the\s+|together[^“"]*)?[“"]([A-Za-z ]{2,30})[”"]/g;
+
+function preamble(text) {
+  const flat = text.slice(0, 40000).replace(/\s+/g, " ");
+  // Skip the cover page and table of contents: anchor on the first defined role, e.g. ("Parent").
+  const roleAt = flat.search(/\((?:the\s+)?[“"](?:Parent|Company|Buyer|Purchaser|Merger Sub)[”"]\)/);
+  const intro = roleAt >= 0 ? flat.lastIndexOf(" among ", roleAt) : -1;
+  const from = intro >= 0 && roleAt - intro < 1500 ? intro : roleAt >= 0 ? Math.max(0, roleAt - 600) : 0;
+  const seg = flat.slice(from, from + 2200);
+  // Each party is followed by its defined role in quotes; the name is the text just before
+  // ", a <jurisdiction> corporation ...". Walk the role markers in order.
+  const ROLE = /\((?:the\s+|together with[^“"]*|collectively[^“"]*)?[“"](Parent|Company|Merger Sub|Merger Subsidiary|Sub|Buyer|Purchaser|Acquiror|Acquirer|Holdings|Merger Sub I|Merger Sub II|Guarantor|Seller)[”"]/g;
+  const parties = [];
+  let prev = 0;
+  for (const m of seg.matchAll(ROLE)) {
+    const window = seg.slice(prev, m.index);
+    prev = m.index + m[0].length;
+    const last = window.split(/\),?\s*(?:and\s+)?/).pop() || window;
+    const name = last
+      .replace(/^.*?\b(?:by and among|among|between)\s+/i, "")
+      .replace(/^[\s,;]*(?:and\s+)?/i, "")
+      .split(/,\s+(?:an?|the)\s+/i)[0]
+      .replace(/[,\s]+$/, "")
+      .trim();
+    const junk = /\b(is|are|made|entered|into|dated|this|hereto|agreement|plan of merger)\b/i.test(name);
+    if (!junk && name.length > 2 && name.length < 90 && !parties.some((x) => x.name === name)) parties.push({ name, role: m[1] });
+    if (parties.length >= 5) break;
+  }
+  const dateM = seg.match(/(?:dated|entered into|made)(?: and entered into)? as of ([A-Z][a-z]+ \d{1,2}, \d{4})/i) || flat.slice(0, 6000).match(/Dated as of ([A-Z][a-z]+ \d{1,2}, \d{4})/i);
+  const d = dateM ? new Date(`${dateM[1]} UTC`) : null;
+  const role = (re) => parties.find((p) => re.test(p.role))?.name;
+  const target = role(/^company$/i);
+  const buyer = role(/^(parent|buyer|purchaser|acquiror|acquirer)$/i);
+  return {
+    names: parties.map((p) => p.name),
+    target,
+    buyer,
+    date: d && !isNaN(d) ? d.toISOString().slice(0, 10) : "",
+  };
+}
+
+function maudAnswers(dir) {
+  const byContract = new Map();
+  for (const f of ["MAUD_train.csv", "MAUD_dev.csv", "MAUD_test.csv"]) {
+    const p = path.join(dir, f);
+    if (!fs.existsSync(p)) continue;
+    for (const r of parseCsv(fs.readFileSync(p, "utf8"))) {
+      if (r.data_type !== "main" || !r.answer) continue;
+      const m = byContract.get(r.contract_name) || {};
+      if (r.question && r.answer && !m[r.question]) m[r.question] = r.answer;
+      byContract.set(r.contract_name, m);
+    }
+  }
+  return byContract;
+}
+
 function buildMaud(dir) {
-  const rows = parseCsv(fs.readFileSync(path.join(dir, "raw", "main.csv"), "utf8"));
+  const answers = maudAnswers(dir);
+  const files = fs.readdirSync(path.join(dir, "contracts")).filter((f) => /^contract_\d+\.txt$/.test(f));
   const out = [];
-  rows.forEach((row) => {
-    const anon = (row["Filename (anon)"] || "").replace(/\.pdf$/i, "");
-    const file = path.join(dir, "contracts", `${anon}.txt`);
-    if (!anon || !fs.existsSync(file)) return;
-    const text = fs.readFileSync(file, "utf8");
-    const n = Number(anon.replace(/\D/g, ""));
+  for (const f of files) {
+    const name = f.replace(/\.txt$/, "");
+    const text = fs.readFileSync(path.join(dir, "contracts", f), "utf8");
+    const n = Number(name.replace(/\D/g, ""));
     const id = `MAUD-${String(n).padStart(4, "0")}`;
-    const parties = row.Filename.replace(/\.pdf$/i, "").split("_").map((s) => s.trim()).filter(Boolean);
+    const pre = preamble(text);
+    const a = answers.get(name) || {};
     const fee = text.match(/Termination Fee[^.]{0,300}?\$\s?[\d,.]+\s*(?:million|billion)?/i);
     const feeUSD = fee ? Math.max(0, ...dollarAmounts(fee[0])) || null : null;
-    const consideration = clean(row["Type of Consideration-Answer"]);
-    const tail = clean(row["Tail Period Length-Answer"]);
+    const consideration = clean(a["Type of Consideration-Answer"] || "");
+    const tail = clean(a["Tail Period Length-Answer"] || "");
     const rec = {
       id,
       dataset: "MAUD",
-      title: `Merger Agreement — ${parties.join(" / ")}`,
+      title: pre.target && pre.buyer ? `Merger Agreement — ${pre.target} acquired by ${pre.buyer}` : pre.names.length >= 2 ? `Merger Agreement — ${pre.names.join(" / ")}` : `Merger Agreement (MAUD ${name})`,
       contractType: "Merger Agreement",
-      parties,
-      date: "",
+      parties: pre.names,
+      date: pre.date,
       governingLaw: lawFromText(text),
       cap: { text: "", type: "none", amountUSD: null },
       renewal: "",
@@ -251,14 +312,14 @@ function buildMaud(dir) {
       dealPoints: [consideration && `consideration: ${consideration}`, tail && `tail period: ${tail}`, feeUSD && `termination fee about $${Math.round(feeUSD).toLocaleString("en-US")}`]
         .filter(Boolean)
         .join("; "),
-      source: `MAUD · ${row.Filename}`,
-      sourceFile: row.Filename,
+      source: `MAUD · ${name}`,
+      sourceFile: `${name}.txt`,
       chars: text.length,
     };
     rec.summary = summaryOf(rec);
     writeText(id, text);
     out.push(rec);
-  });
+  }
   return out;
 }
 

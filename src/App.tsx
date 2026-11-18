@@ -38,7 +38,8 @@ import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import { AgentRun, ContractAnalysisResult, Playbook } from "./types";
 import { DEFAULT_PLAYBOOKS } from "./data/playbooks";
-import { SAMPLE_CONTRACTS, SampleContract } from "./data/sampleContracts";
+import { REAL_SAMPLES, RealSample } from "./data/realSamples";
+import { loadContractText } from "./repository/corpus";
 import { runContractIntelligence, AgentKey, AgentState } from "./services/gemini";
 import { RAG_CONFIG } from "./rag/config";
 import { indexDocument } from "./rag";
@@ -48,7 +49,7 @@ import { openRiskReport } from "./utils/riskReport";
 import { pageAt } from "./utils/obligationsExport";
 import { Language } from "./i18n/translations";
 import { LangProvider, toBnDigits } from "./i18n/lang";
-import { SAMPLES_BN, playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
+import { playbookText, playbookLabel, TERMS_BN } from "./i18n/dataBn";
 import { PlaybookStudio } from "./components/PlaybookStudio";
 import { AnalysisOverview } from "./components/AnalysisOverview";
 import { RedlineViewer } from "./components/RedlineViewer";
@@ -61,6 +62,7 @@ import { PlaybookScorecard } from "./components/PlaybookScorecard";
 import { applyScoring, rescore } from "./utils/scoring";
 import { ContractView } from "./components/ContractView";
 import { AgentPipeline, AgentRunsCard, PIPELINE_ORDER } from "./components/AgentPipeline";
+import { HowItWorks } from "./components/HowItWorks";
 import { buildFindings, findingId } from "./utils/findings";
 import LandGuide from "./components/legal/LandGuide";
 import CaseHelper from "./components/legal/CaseHelper";
@@ -71,7 +73,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 // for example in a build focused on contract review.
 const SHOW_LEGAL_BD = import.meta.env.VITE_SHOW_LEGAL_BD !== "false";
 
-type View = "review" | "playbooks" | "library" | "land" | "case";
+type View = "review" | "playbooks" | "library" | "about" | "land" | "case";
 type ResultTab = "Analysis" | "Contract" | "Redlines" | "Obligations" | "Gold Standard" | "AI Counsel Chat";
 type Notice = { text: string; kind: "info" | "ok" | "warn" | "error" } | null;
 type Progress = Record<AgentKey, AgentState | "waiting">;
@@ -180,14 +182,26 @@ export default function App() {
     }
   };
 
-  const handleLoadSample = (sample: SampleContract) => {
-    setFile(null);
-    setDocName(sample.name);
-    setContractText(sample.text);
+  // Samples are real contracts from the repository; their text is fetched on click.
+  const [sampleId, setSampleId] = useState<string | null>(null);
+  const handleLoadSample = async (sample: RealSample) => {
+    setBusyExtracting(true);
     setNotice(null);
+    setFile(null);
+    try {
+      const text = await loadContractText(sample.id);
+      setDocName(sample.name);
+      setContractText(text);
+      setSampleId(sample.id);
+    } catch (e: any) {
+      setNotice({ kind: "error", text: L(`Could not load the sample: ${e?.message || e}`, `স্যাম্পল লোড করা যায়নি: ${e?.message || e}`) });
+    } finally {
+      setBusyExtracting(false);
+    }
   };
 
   const clearDoc = () => {
+    setSampleId(null);
     setFile(null);
     setDocName("");
     setContractText("");
@@ -280,6 +294,9 @@ export default function App() {
             </button>
             <button className={view === "library" ? "on" : ""} onClick={() => setView("library")}>
               <Database size={15} /> <span className="lbl">{L("Library", "লাইব্রেরি")}</span>
+            </button>
+            <button className={view === "about" ? "on" : ""} onClick={() => setView("about")}>
+              <Info size={15} /> <span className="lbl">{L("How it works", "কীভাবে কাজ করে")}</span>
             </button>
             {SHOW_LEGAL_BD && (
               <>
@@ -410,18 +427,23 @@ export default function App() {
 
                 <div className="divider">{L("or try a sample", "অথবা স্যাম্পল ব্যবহার করুন")}</div>
                 <div className="samples">
-                  {SAMPLE_CONTRACTS.map((s) => (
+                  {REAL_SAMPLES.map((s) => (
                     <button
                       key={s.id}
-                      className={`sample ${!file && contractText === s.text ? "on" : ""}`}
+                      className={`sample ${!file && sampleId === s.id && docName === s.name ? "on" : ""}`}
                       onClick={() => handleLoadSample(s)}
+                      disabled={busyExtracting}
+                      title={s.source}
                     >
-                      <span className="tag brand">{lang === "bn" ? s.badge.replace("Dataset", "ডেটাসেট") : s.badge}</span>
-                      <b>{(lang === "bn" && SAMPLES_BN[s.id]?.name) || s.name}</b>
-                      <small>{(lang === "bn" && SAMPLES_BN[s.id]?.type) || s.type}</small>
+                      <span className="tag brand">{s.badge}</span>
+                      <b>{lang === "bn" ? s.nameBn : s.name}</b>
+                      <small>{lang === "bn" ? s.typeBn : s.type}</small>
                     </button>
                   ))}
                 </div>
+                <p className="text-[11px] text-faint" style={{ margin: "8px 2px 0" }}>
+                  {L("Samples are real public contracts filed with the SEC, from the CUAD v1 and MAUD datasets (The Atticus Project, CC BY 4.0).", "স্যাম্পলগুলো SEC-এ দাখিল করা বাস্তব পাবলিক চুক্তি, CUAD v1 ও MAUD ডেটাসেট থেকে (The Atticus Project, CC BY 4.0)।")}
+                </p>
               </section>
 
               {/* Step 2 + 3 */}
@@ -513,6 +535,17 @@ export default function App() {
                 setNotice({ kind: "ok", text: L(`Loaded "${title}". Choose a playbook and click Analyze.`, `"${title}" লোড হয়েছে। প্লেবুক বেছে বিশ্লেষণ করুন।`) });
               }}
             />
+          </>
+        )}
+
+        {/* ───────────── HOW IT WORKS ───────────── */}
+        {view === "about" && (
+          <>
+            <PageIntro
+              title={L("How ContractMind works", "ContractMind কীভাবে কাজ করে")}
+              desc={L("Contract review with six AI agents, retrieval over your contract and a 650-contract repository, and outputs you can export.", "ছয়টি এআই এজেন্ট, আপনার চুক্তি ও ৬৫০টি চুক্তির ভান্ডারে খোঁজ, এবং এক্সপোর্টযোগ্য ফলাফল দিয়ে চুক্তি পর্যালোচনা।")}
+            />
+            <HowItWorks onOpen={(v) => { setView(v); window.scrollTo({ top: 0 }); }} />
           </>
         )}
 
