@@ -10,10 +10,8 @@ import {
   FileEdit,
   FileSearch,
   FileText,
-  Gavel,
   GitCompare,
   Info,
-  Landmark,
   LayoutDashboard,
   ListOrdered,
   Lock,
@@ -65,16 +63,11 @@ import { AgentPipeline, AgentRunsCard, PIPELINE_ORDER } from "./components/Agent
 import { HowItWorks } from "./components/HowItWorks";
 import { GeminiStatusPill } from "./components/GeminiStatusPill";
 import { buildFindings, findingId } from "./utils/findings";
-import LandGuide from "./components/legal/LandGuide";
-import CaseHelper from "./components/legal/CaseHelper";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
-// Land Guide and Case Helper (Bangladesh legal help). Set VITE_SHOW_LEGAL_BD=false to hide them,
-// for example in a build focused on contract review.
-const SHOW_LEGAL_BD = import.meta.env.VITE_SHOW_LEGAL_BD !== "false";
 
-type View = "review" | "playbooks" | "library" | "about" | "land" | "case";
+type View = "review" | "playbooks" | "library" | "about";
 type ResultTab = "Analysis" | "Contract" | "Redlines" | "Obligations" | "Gold Standard" | "AI Counsel Chat";
 type Notice = { text: string; kind: "info" | "ok" | "warn" | "error" } | null;
 type Progress = Record<AgentKey, AgentState | "waiting">;
@@ -299,16 +292,6 @@ export default function App() {
             <button className={view === "about" ? "on" : ""} onClick={() => setView("about")}>
               <Info size={15} /> <span className="lbl">{L("How it works", "কীভাবে কাজ করে")}</span>
             </button>
-            {SHOW_LEGAL_BD && (
-              <>
-                <button className={view === "land" ? "on" : ""} onClick={() => setView("land")}>
-                  <Landmark size={15} /> <span className="lbl">{L("Land Guide", "জমি গাইড")}</span>
-                </button>
-                <button className={view === "case" ? "on" : ""} onClick={() => setView("case")}>
-                  <Gavel size={15} /> <span className="lbl">{L("Case Helper", "আইনি সহায়তা")}</span>
-                </button>
-              </>
-            )}
           </nav>
 
           <div className="topActions">
@@ -550,37 +533,6 @@ export default function App() {
           </>
         )}
 
-        {/* ───────────── LAND GUIDE ───────────── */}
-        {SHOW_LEGAL_BD && view === "land" && (
-          <>
-            <PageIntro
-              title={L("Land Guide", "জমি গাইড")}
-              desc={L(
-                "Get inherited land recorded in the heirs' names without a broker: steps, offices, a share calculator and a khatian reader. Page content is in Bangla.",
-                "ওয়ারিশ সূত্রে পাওয়া জমি দালাল ছাড়া নিজেদের নামে নেওয়ার ধাপ, কাগজ, অফিস, ভাগের হিসাব আর খতিয়ান পড়া।"
-              )}
-            />
-            <ErrorBoundary>
-              <LandGuide />
-            </ErrorBoundary>
-          </>
-        )}
-
-        {/* ───────────── CASE HELPER ───────────── */}
-        {SHOW_LEGAL_BD && view === "case" && (
-          <>
-            <PageIntro
-              title={L("Case Helper", "আইনি সহায়তা")}
-              desc={L(
-                "Understand a legal paper or problem: options, a sensible next step and questions for a lawyer. Content is in Bangla.",
-                "যেকোনো আইনি কাগজ বা সমস্যা বুঝে নিন: বিকল্প, করণীয় আর আইনজীবীর জন্য প্রশ্ন।"
-              )}
-            />
-            <ErrorBoundary>
-              <CaseHelper />
-            </ErrorBoundary>
-          </>
-        )}
       </main>
 
       <GeminiStatusPill />

@@ -1,6 +1,6 @@
 # ContractMind
 
-**AI-native contract review.** Upload a raw contract PDF and ContractMind scores its risk against a playbook you control, writes redlines that explain themselves, extracts obligations and payment milestones as validated JSON and a calendar, benchmarks every clause against a Gold Standard library, and searches 650 real contracts in plain language. English and Bangla.
+**AI-native contract review.** Upload a raw contract PDF and ContractMind scores its risk against a playbook you control, writes redlines that explain themselves, extracts obligations and payment milestones as validated JSON and a calendar, benchmarks every clause against a Gold Standard library, and searches 650 real contracts in plain language. English and Bangla interface.
 
 React + Vite + TypeScript on Vercel. Gemini is called through a server-side proxy (`api/gemini.ts`), so the API key never reaches the browser.
 
@@ -154,17 +154,6 @@ Until step 2 is run the Library shows "Keyword search (semantic index not built 
 - The scorecard shows a one-line explanation of the score, and every rule that is not passing gets an AI "what to do" suggestion.
 - **Risk report (PDF)** on the results page opens the print dialog with the score, rules, evidence, suggested actions and redlines; choose *Save as PDF*.
 
-## Land Guide and Case Helper
-
-Two extra tabs for people in Bangladesh. Their content is in Bangla; the tab names follow the EN/বাংলা toggle.
-
-- **Land Guide (জমি গাইড)**: steps for inheritance mutation (namjari) without a broker, how to find a khatian on the government portals, a khatian reader (upload a photo or PDF and Gemini explains owners, shares and plots), an inheritance share calculator (Muslim faraid, Hindu Dayabhaga, Christian Succession Act 1925, common family cases only), an heir-details organiser with a copy button, and a Q&A chat.
-- **Case Helper (আইনি সহায়তা)**: first steps after receiving a summons or notice, free legal aid information, an explainer for a legal paper or a typed problem (options, a sensible next step, questions for a lawyer), and a Q&A chat.
-
-Code: `src/components/legal/` (pages), `src/services/legalAssist.ts` (prompts and Gemini calls through the same `/api/gemini` proxy), `src/legal/faraid.ts` (share calculator, tested in `faraid.test.ts`). Styles are scoped under `.legalPage` in `src/style.css`.
-
-Uploads on these pages are limited to 3 MB, because Vercel functions reject request bodies over 4.5 MB and files are sent base64-encoded. Everything shown is general information, not legal advice; the calculator refuses cases it does not cover and says to ask a lawyer.
-
 ## Chunking + retrieval (RAG) pipeline
 
 Instead of sending the whole contract to Gemini for every task, the app indexes each document once and sends only the relevant passages.
@@ -212,7 +201,6 @@ All optional, read at build/dev start (client-visible, so they need the `VITE_` 
 | `VITE_GEMINI_MAX_CONCURRENT` | `2` | Most Gemini requests running at once (protects the per-minute rate limit). |
 | `VITE_GEMINI_LITE_MODEL` | fallback model | Model for light tasks (obligations, completing redline reasoning, Library questions); the main model is their backup. |
 | `VITE_RAG_GOLD_MIN_SIMILARITY` | `0.6` | Similarity (0-1) at which a contract section counts as covering a Gold Standard clause. |
-| `VITE_SHOW_LEGAL_BD` | `true` | `false` hides the Land Guide and Case Helper tabs. |
 
 Changing the embedding model, dimension, chunk size or overlap re-indexes documents automatically (they are part of the cache key).
 

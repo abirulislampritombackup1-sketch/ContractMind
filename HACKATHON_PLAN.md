@@ -41,7 +41,7 @@ Every item in the brief, where ContractMind stands today, and the step that fini
 ### 1.1 Bring back the hidden features
 - **Files:** `src/App.tsx`.
 - Restore the **Playbooks** and **Library** buttons in the top menu, the **Customize** link in step 2, and the sample contracts under the upload box.
-- Hide **Land Guide** and **Case Helper** behind a build flag (`VITE_SHOW_LEGAL_BD=false` for the hackathon build) so the demo stays on the brief. Keep the code.
+- ~~Hide **Land Guide** and **Case Helper** behind a build flag.~~ Both pages have since been removed from the project.
 - **Done when:** a judge can reach playbooks, library and samples within one click from the home page.
 
 ### 1.2 Make sure the live site works
