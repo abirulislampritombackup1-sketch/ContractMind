@@ -39,8 +39,8 @@ describe("Gemini retries", () => {
     const { res, model } = await callGemini({ contents: [] });
     off();
     expect(res.status).toBe(200);
-    expect(model).toBe("gemini-3.5-flash");
-    expect(calls).toEqual(["gemini-3.5-flash", "gemini-3.5-flash", "gemini-3.5-flash"]);
+    expect(model).toBe("gemini-3.8-flash");
+    expect(calls).toEqual(["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash"]);
     expect(waits).toHaveLength(2);
     expect(waits[1]).toBeGreaterThan(waits[0]); // exponential backoff
     expect(seen.map((s) => s.state)).toEqual(["waiting", "ok", "waiting", "ok", "ok"]); // notice hides during each retry
@@ -49,14 +49,30 @@ describe("Gemini retries", () => {
   it("moves to the backup model after three overloaded answers", async () => {
     stubFetch([busy, busy, busy, ok]);
     const { model } = await callGemini({ contents: [] });
+    expect(model).toBe("gemini-3.5-flash");
+    expect(calls).toEqual(["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash"]);
+  });
+
+  it("uses the lite model as the last resort when both Flash models are overloaded", async () => {
+    stubFetch([busy, busy, busy, busy, busy, busy, ok]);
+    const { model } = await callGemini({ contents: [] });
     expect(model).toBe("gemini-3.5-flash-lite");
-    expect(calls).toEqual(["gemini-3.5-flash", "gemini-3.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]);
+    expect(calls.slice(-1)).toEqual(["gemini-3.5-flash-lite"]);
+  });
+
+  it("skips a model that just failed, for a while", async () => {
+    stubFetch([busy, busy, busy, ok, ok]);
+    await callGemini({ contents: [] }); // 3.8 Flash fails three times, 3.5 Flash answers
+    calls = [];
+    const { model } = await callGemini({ contents: [] });
+    expect(model).toBe("gemini-3.5-flash");
+    expect(calls).toEqual(["gemini-3.5-flash"]); // 3.8 Flash not retried during its cool-down
   });
 
   it("waits as long as Google asks on a 429, then retries the same model", async () => {
     stubFetch([() => limited("3s"), ok]);
     const { model } = await callGemini({ contents: [] });
-    expect(model).toBe("gemini-3.5-flash");
+    expect(model).toBe("gemini-3.8-flash");
     expect(waits[0]).toBeGreaterThanOrEqual(3000);
     expect(waits[0]).toBeLessThan(3600);
   });
@@ -65,7 +81,7 @@ describe("Gemini retries", () => {
     stubFetch([() => limited("90s"), ok]);
     const { model } = await callGemini({ contents: [] });
     expect(waits).toEqual([]);
-    expect(model).toBe("gemini-3.5-flash-lite");
+    expect(model).toBe("gemini-3.5-flash");
   });
 
   it("sends light tasks to the lite model first", async () => {

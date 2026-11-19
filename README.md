@@ -44,7 +44,8 @@ flowchart LR
 
 All model calls go through `/api/gemini` (key server-side), and token usage is logged per call (`__contractmindTokens.totals()` in the console). To stay inside rate limits:
 
-- **503 (model overloaded):** retried on the same model with a short backoff (about 2 s, then 4 s) before switching to the backup model.
+- **Model chain:** 3.8 Flash → 3.5 Flash → 3.5 Flash Lite. A model that keeps failing is skipped for 2 minutes (the last one never is).
+- **503 (model overloaded):** retried on the same model with a short backoff (about 2 s, then 4 s) before moving to the next model.
 - **429 (rate limit):** waits as long as Google asks (`Retry-After` / `RetryInfo`, up to 35 s) and retries; longer waits go straight to the backup model. A notice at the bottom of the screen shows the wait.
 - At most 2 requests run at once; light tasks use the lite model (free-tier limits are per model); query embeddings are cached; the Library only asks the AI to read a question when the built-in parser finds no filter, and writes its summary only on request.
 
@@ -193,8 +194,8 @@ All optional, read at build/dev start (client-visible, so they need the `VITE_` 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | – | Server-side key used by the proxy (required). |
-| `VITE_GEMINI_MODEL` | `gemini-3.5-flash` | Primary generation model. |
-| `VITE_GEMINI_FALLBACK_MODEL` | `gemini-3.5-flash-lite` | Fallback generation model. |
+| `VITE_GEMINI_MODEL` | `gemini-3.8-flash` | Main generation model. |
+| `VITE_GEMINI_FALLBACK_MODEL` | `gemini-3.5-flash` | Backup used when the main model is busy, rate-limited or not responding. |
 | `VITE_GEMINI_EMBEDDING_MODEL` | `gemini-embedding-001` | Embedding model. |
 | `VITE_RAG_ENABLED` | `true` | `false` sends whole documents (old behaviour). |
 | `VITE_RAG_TOP_K` | `5` | Base number of chunks per query. Agents use a multiple (risk and obligations ×3, redlines ×2.5, benchmarks ×2). |
@@ -205,7 +206,7 @@ All optional, read at build/dev start (client-visible, so they need the `VITE_` 
 | `VITE_RAG_SUMMARY_BATCH_CHARS` | `12000` | Characters per group in chunk-by-chunk summaries. |
 | `VITE_RAG_MIN_PAGE_CHARS` | `40` | Pages with fewer characters are flagged as scanned. |
 | `VITE_GEMINI_MAX_CONCURRENT` | `2` | Most Gemini requests running at once (protects the per-minute rate limit). |
-| `VITE_GEMINI_LITE_MODEL` | fallback model | Model for light tasks (obligations, completing redline reasoning, Library questions); the main model is their backup. |
+| `VITE_GEMINI_LITE_MODEL` | `gemini-3.5-flash-lite` | Last resort when both Flash models fail, and first choice for light tasks (obligations, completing redline reasoning, Library questions). |
 | `VITE_RAG_GOLD_MIN_SIMILARITY` | `0.6` | Similarity (0-1) at which a contract section counts as covering a Gold Standard clause. |
 
 Changing the embedding model, dimension, chunk size or overlap re-indexes documents automatically (they are part of the cache key).

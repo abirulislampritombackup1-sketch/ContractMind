@@ -17,10 +17,10 @@ import { logUsage } from "../rag/tokenLog";
 
 // The API key never reaches the browser: requests go to /api/gemini, and the
 // server-side proxy (vite.config.ts) attaches GEMINI_API_KEY before forwarding.
-const MODEL = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || "gemini-3.5-flash";
-// Used when the primary model is overloaded (503/429), erroring, or too slow.
-const FALLBACK_MODEL =
-  (import.meta.env.VITE_GEMINI_FALLBACK_MODEL as string | undefined) || "gemini-3.5-flash-lite";
+// Model chain: the main model, a backup of the same class, then the lite model as last resort.
+// Each is tried in turn when the one before is overloaded (503/429), erroring, or too slow.
+const MODEL = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || "gemini-3.8-flash";
+const FALLBACK_MODEL = (import.meta.env.VITE_GEMINI_FALLBACK_MODEL as string | undefined) || "gemini-3.5-flash";
 const MAX_CHARS = 400000;
 
 // The canned demo analysis describes the bundled sample contracts only, so it
@@ -31,7 +31,7 @@ const isSampleContract = (text: string) =>
 // Light tasks (obligations, filling in redline reasoning, Library questions) go to the lite
 // model first. Free-tier limits are counted per model, so this keeps the main model's quota
 // for the reasoning-heavy agents. Override with VITE_GEMINI_LITE_MODEL.
-const LITE_MODEL = (import.meta.env.VITE_GEMINI_LITE_MODEL as string | undefined) || FALLBACK_MODEL;
+const LITE_MODEL = (import.meta.env.VITE_GEMINI_LITE_MODEL as string | undefined) || "gemini-3.5-flash-lite";
 
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 const PRIMARY_TIMEOUT_MS = 25000;
@@ -39,10 +39,11 @@ const FALLBACK_TIMEOUT_MS = 60000;
 const TRIES_PER_MODEL = 3; // first try + 2 retries before moving to the next model
 const MAX_LIMIT_WAIT_MS = 35000; // longer waits for a rate limit go to the next model instead
 
-// Circuit breaker: after the primary model keeps failing (overloaded / hung), skip it for a
-// short while so every request doesn't wait out its retries again.
-const PRIMARY_COOLDOWN_MS = 2 * 60 * 1000;
-let primaryBlockedUntil = 0;
+// Circuit breaker: a model that keeps failing (overloaded / hung) is skipped for a short
+// while, so every request doesn't wait out its retries again. The last model in a chain is
+// never skipped.
+const COOLDOWN_MS = 2 * 60 * 1000;
+const blockedUntil = new Map<string, number>();
 
 // ── Status for the UI ("AI is busy, retrying in 4 s") ─────────────────────────
 export type GeminiStatus = { state: "waiting"; reason: "busy" | "limit"; seconds: number; model: string } | { state: "ok" };
@@ -57,7 +58,7 @@ let sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 /** Tests replace the timer so retries run instantly. */
 export function __setSleepForTests(fn: (ms: number) => Promise<void>) {
   sleep = fn;
-  primaryBlockedUntil = 0;
+  blockedUntil.clear();
 }
 
 /**
@@ -112,13 +113,13 @@ export function callGemini(body: any, opts: CallOptions = {}): Promise<{ res: Re
 }
 
 async function callGeminiNow(body: any, opts: CallOptions): Promise<{ res: Response; model: string }> {
-  const chain = [...new Set(opts.lite ? [LITE_MODEL, MODEL] : [MODEL, FALLBACK_MODEL])];
+  const chain = [...new Set(opts.lite ? [LITE_MODEL, FALLBACK_MODEL] : [MODEL, FALLBACK_MODEL, LITE_MODEL])];
   let last: { res: Response; model: string } | null = null;
   let lastError = "";
 
   for (const [i, model] of chain.entries()) {
-    const isPrimary = model === MODEL && !opts.lite && chain.length > 1;
-    if (isPrimary && Date.now() < primaryBlockedUntil) continue;
+    const isLast = i === chain.length - 1;
+    if (!isLast && Date.now() < (blockedUntil.get(model) || 0)) continue;
     const timeoutMs = i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS;
     let payload = body;
     let gaveUp = false;
@@ -174,7 +175,7 @@ async function callGeminiNow(body: any, opts: CallOptions): Promise<{ res: Respo
       }
     }
 
-    if (isPrimary) primaryBlockedUntil = Date.now() + PRIMARY_COOLDOWN_MS;
+    if (!isLast) blockedUntil.set(model, Date.now() + COOLDOWN_MS);
     if (i < chain.length - 1) console.warn(`[ContractMind] ${lastError}; trying ${chain[i + 1]}.`);
   }
   emitStatus({ state: "ok" });
