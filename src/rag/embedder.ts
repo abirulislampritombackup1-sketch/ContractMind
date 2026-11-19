@@ -77,3 +77,65 @@ export async function embedTexts(texts: string[], taskType: EmbedTaskType, deps:
   }
   return out;
 }
+
+// ── Query embedding cache ────────────────────────────────────────────────────
+// Agents search with the same playbook-based queries for every contract, and people repeat
+// Library searches, so query vectors are kept (memory + localStorage, newest 300).
+const QCACHE_KEY = "cm-qcache-v1";
+const QCACHE_MAX = 300;
+let qcache: Map<string, string> | null = null;
+
+function loadQCache(): Map<string, string> {
+  if (qcache) return qcache;
+  qcache = new Map();
+  try {
+    const raw = JSON.parse(localStorage.getItem(QCACHE_KEY) || "[]");
+    if (Array.isArray(raw)) for (const [k, v] of raw) qcache.set(k, v);
+  } catch {}
+  return qcache;
+}
+function saveQCache() {
+  try {
+    localStorage.setItem(QCACHE_KEY, JSON.stringify([...loadQCache()].slice(-QCACHE_MAX)));
+  } catch {
+    // Storage full or blocked: the cache still works in memory for this visit.
+  }
+}
+const toB64 = (v: Float32Array) => {
+  const bytes = new Uint8Array(v.buffer.slice(0));
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+};
+const fromB64 = (b: string) => {
+  const s = atob(b);
+  const bytes = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
+  return new Float32Array(bytes.buffer);
+};
+
+/** Like embedTexts(…, "RETRIEVAL_QUERY"), but reuses vectors embedded before. */
+export async function embedQueriesCached(texts: string[], deps: EmbedDeps = {}): Promise<Float32Array[]> {
+  const cache = loadQCache();
+  const dim = deps.dim ?? RAG_CONFIG.embeddingDim;
+  const keyOf = (t: string) => `${RAG_CONFIG.embeddingModel}|${dim}|${t}`;
+  const missing = [...new Set(texts.filter((t) => !cache.has(keyOf(t))))];
+  if (missing.length) {
+    const vecs = await embedTexts(missing, "RETRIEVAL_QUERY", deps);
+    missing.forEach((t, i) => {
+      cache.delete(keyOf(t));
+      cache.set(keyOf(t), toB64(vecs[i]));
+    });
+    while (cache.size > QCACHE_MAX) cache.delete(cache.keys().next().value!);
+    saveQCache();
+  }
+  return texts.map((t) => fromB64(cache.get(keyOf(t))!));
+}
+
+/** For tests: forget cached query vectors. */
+export function __clearQueryCache() {
+  qcache = new Map();
+  try {
+    localStorage.removeItem(QCACHE_KEY);
+  } catch {}
+}

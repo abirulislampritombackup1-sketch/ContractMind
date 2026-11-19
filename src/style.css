@@ -835,3 +835,9 @@ button.danger { color: var(--danger); }
   .mainNav button { flex: 1; justify-content: center; padding: 8px 10px; }
   .topActions { margin-left: auto; }
 }
+
+/* ---------- AI waiting notice ---------- */
+.aiWait { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 32px);
+  padding: 9px 16px; border-radius: 999px; background: var(--card); border: 1px solid rgb(var(--warn-rgb) / 0.45); color: var(--text); font-size: 13px; font-weight: 600;
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.35); animation: rise 0.25s ease both; }
+.aiWait svg { color: var(--warn); flex-shrink: 0; }

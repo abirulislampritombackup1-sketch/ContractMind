@@ -2,7 +2,7 @@
 // keyword ranking, and a short cited answer for non-lawyers.
 
 import { callGemini } from "../services/gemini";
-import { embedTexts } from "../rag/embedder";
+import { embedQueriesCached } from "../rag/embedder";
 import { logUsage } from "../rag/tokenLog";
 import { Corpus, CorpusContract, cosineAt, loadCorpus, loadVectors } from "./corpus";
 import { Bm25, CLAUSE_KEYS, ParsedQuery, rank, Ranked, RepoFilters, parseQueryRules } from "./query";
@@ -43,7 +43,7 @@ export async function parseQuery(q: string, laws: string[], types: string[]): Pr
         },
       ],
       generationConfig: { responseMimeType: "application/json", responseSchema: PARSE_SCHEMA, temperature: 0, thinkingConfig: { thinkingLevel: "low" } },
-    });
+    }, { lite: true });
     if (!res.ok) return rules;
     const data = await res.json();
     logUsage("repo-parse", model, data?.usageMetadata, { mode: "full" });
@@ -79,14 +79,22 @@ export async function searchRepository(q: string, opts: { parsed?: ParsedQuery; 
   if (bm25?.key !== key) bm25 = { key, index: new Bm25(all.map((c) => `${c.title} ${c.contractType} ${c.summary}`)) };
   const laws = [...new Set(all.map((c) => c.governingLaw).filter(Boolean))];
   const types = [...new Set(all.map((c) => c.contractType))];
-  const parsed = opts.parsed ?? (q.trim() ? (opts.useAI === false ? parseQueryRules(q) : await parseQuery(q, laws, types)) : { text: "", filters: {}, by: "rules" as const });
+  // The built-in parser handles most questions; the AI is only asked when it finds no filter.
+  const rules = parseQueryRules(q);
+  const parsed =
+    opts.parsed ??
+    (!q.trim()
+      ? { text: "", filters: {}, by: "rules" as const }
+      : opts.useAI === false || Object.keys(rules.filters).length
+      ? rules
+      : await parseQuery(q, laws, types));
 
   let semantic: ((c: CorpusContract) => number | undefined) | undefined;
   if (parsed.text.trim()) {
     const vectors = await loadVectors();
     if (vectors) {
       try {
-        const [qv] = await embedTexts([parsed.text], "RETRIEVAL_QUERY", { dim: vectors.dim });
+        const [qv] = await embedQueriesCached([parsed.text], { dim: vectors.dim });
         semantic = (c) => {
           const i = vectors.index.get(c.id);
           return i === undefined ? undefined : cosineAt(vectors, i, qv);
@@ -120,7 +128,7 @@ export async function answerQuestion(q: string, results: Ranked[], lang: "en" | 
       },
     ],
     generationConfig: { temperature: 0.2, thinkingConfig: { thinkingLevel: "low" } },
-  });
+  }, { lite: true });
   if (!res.ok) throw new Error(String(res.status));
   const data = await res.json();
   logUsage("repo-answer", model, data?.usageMetadata, { mode: "full" });

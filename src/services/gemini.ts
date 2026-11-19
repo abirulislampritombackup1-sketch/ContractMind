@@ -23,33 +23,70 @@ const FALLBACK_MODEL =
   (import.meta.env.VITE_GEMINI_FALLBACK_MODEL as string | undefined) || "gemini-3.5-flash-lite";
 const MAX_CHARS = 400000;
 
-// Attempt plan per request: primary once, then the fallback (with one retry).
-const ATTEMPTS: { model: string; timeoutMs: number; delayMs: number }[] = [
-  { model: MODEL, timeoutMs: 25000, delayMs: 0 },
-  { model: FALLBACK_MODEL, timeoutMs: 60000, delayMs: 0 },
-  { model: FALLBACK_MODEL, timeoutMs: 60000, delayMs: 2000 },
-];
-const RETRYABLE = new Set([429, 500, 502, 503, 504]);
-
-// Circuit breaker: after the primary model fails (overloaded / hung), skip it
-// for a few minutes so every request doesn't wait out its timeout again.
-const PRIMARY_COOLDOWN_MS = 5 * 60 * 1000;
-let primaryBlockedUntil = 0;
-
 // The canned demo analysis describes the bundled sample contracts only, so it
 // may be shown for those — never for a contract the user uploaded.
 const isSampleContract = (text: string) =>
   SAMPLE_CONTRACTS.some((s) => s.text.slice(0, MAX_CHARS).trim() === text.trim());
 
+// Light tasks (obligations, filling in redline reasoning, Library questions) go to the lite
+// model first. Free-tier limits are counted per model, so this keeps the main model's quota
+// for the reasoning-heavy agents. Override with VITE_GEMINI_LITE_MODEL.
+const LITE_MODEL = (import.meta.env.VITE_GEMINI_LITE_MODEL as string | undefined) || FALLBACK_MODEL;
+
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+const PRIMARY_TIMEOUT_MS = 25000;
+const FALLBACK_TIMEOUT_MS = 60000;
+const TRIES_PER_MODEL = 3; // first try + 2 retries before moving to the next model
+const MAX_LIMIT_WAIT_MS = 35000; // longer waits for a rate limit go to the next model instead
+
+// Circuit breaker: after the primary model keeps failing (overloaded / hung), skip it for a
+// short while so every request doesn't wait out its retries again.
+const PRIMARY_COOLDOWN_MS = 2 * 60 * 1000;
+let primaryBlockedUntil = 0;
+
+// ── Status for the UI ("AI is busy, retrying in 4 s") ─────────────────────────
+export type GeminiStatus = { state: "waiting"; reason: "busy" | "limit"; seconds: number; model: string } | { state: "ok" };
+const statusListeners = new Set<(s: GeminiStatus) => void>();
+export function onGeminiStatus(fn: (s: GeminiStatus) => void): () => void {
+  statusListeners.add(fn);
+  return () => statusListeners.delete(fn);
+}
+const emitStatus = (s: GeminiStatus) => statusListeners.forEach((fn) => fn(s));
+
+let sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** Tests replace the timer so retries run instantly. */
+export function __setSleepForTests(fn: (ms: number) => Promise<void>) {
+  sleep = fn;
+  primaryBlockedUntil = 0;
+}
+
 /**
- * POST to Gemini with a per-attempt timeout and automatic fallback to a second
- * model when the first is overloaded, failing, or hangs. Returns the final
- * Response (ok or not) and the model that produced it; throws only when every
- * attempt timed out or the network failed.
+ * How long Google asks us to wait after a 429: the Retry-After header, or the RetryInfo
+ * "retryDelay" (e.g. "33s") in the error body. Returns milliseconds, or null if not given.
  */
-// At most this many Gemini requests run at once, so a burst (4 agents + embeddings + chat)
+export async function retryDelayMs(res: Response): Promise<number | null> {
+  const header = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(header) && header > 0) return header * 1000;
+  try {
+    const body = await res.clone().json();
+    const details: any[] = body?.error?.details || [];
+    const info = details.find((d) => String(d?.["@type"] || "").includes("RetryInfo"));
+    const m = String(info?.retryDelay || "").match(/^([\d.]+)s$/);
+    if (m) return Math.ceil(Number(m[1]) * 1000);
+  } catch {}
+  return null;
+}
+
+/**
+ * POST to Gemini. Overloaded (503/5xx) requests are retried on the same model with a short
+ * backoff before falling back; rate-limited (429) requests wait as long as Google asks (up to
+ * 35 s) and retry. Only then does the request move to the next model. Returns the final
+ * Response (ok or not) and the model that produced it; throws only when every attempt timed
+ * out or the network failed.
+ */
+// At most this many Gemini requests run at once, so a burst (six agents + embeddings + chat)
 // does not hit the free tier's per-minute limit. Override with VITE_GEMINI_MAX_CONCURRENT.
-const MAX_CONCURRENT = Math.max(1, Number(import.meta.env.VITE_GEMINI_MAX_CONCURRENT) || 3);
+const MAX_CONCURRENT = Math.max(1, Number(import.meta.env.VITE_GEMINI_MAX_CONCURRENT) || 2);
 let active = 0;
 const waiting: (() => void)[] = [];
 async function withSlot<T>(run: () => Promise<T>): Promise<T> {
@@ -65,50 +102,80 @@ async function withSlot<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-export function callGemini(body: any): Promise<{ res: Response; model: string }> {
-  return withSlot(() => callGeminiNow(body));
+export type CallOptions = {
+  /** Light task: try the lite model first, the main model as backup. */
+  lite?: boolean;
+};
+
+export function callGemini(body: any, opts: CallOptions = {}): Promise<{ res: Response; model: string }> {
+  return withSlot(() => callGeminiNow(body, opts));
 }
 
-async function callGeminiNow(body: any): Promise<{ res: Response; model: string }> {
+async function callGeminiNow(body: any, opts: CallOptions): Promise<{ res: Response; model: string }> {
+  const chain = [...new Set(opts.lite ? [LITE_MODEL, MODEL] : [MODEL, FALLBACK_MODEL])];
   let last: { res: Response; model: string } | null = null;
   let lastError = "";
-  for (const { model, timeoutMs, delayMs } of ATTEMPTS) {
-    const isPrimary = model === MODEL && model !== FALLBACK_MODEL;
+
+  for (const [i, model] of chain.entries()) {
+    const isPrimary = model === MODEL && !opts.lite && chain.length > 1;
     if (isPrimary && Date.now() < primaryBlockedUntil) continue;
-    if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+    const timeoutMs = i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS;
     let payload = body;
-    for (let strip = 0; strip < 2; strip++) {
+    let gaveUp = false;
+
+    for (let attempt = 0; attempt < TRIES_PER_MODEL && !gaveUp; attempt++) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      let res: Response;
       try {
-        const res = await fetch(`/api/gemini/models/${model}:generateContent`, {
+        res = await fetch(`/api/gemini/models/${model}:generateContent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
           signal: ctrl.signal,
         });
-        // Some models reject thinkingConfig; retry the same model without it.
-        if (res.status === 400 && payload?.generationConfig?.thinkingConfig && strip === 0) {
-          const { thinkingConfig, ...rest } = payload.generationConfig;
-          payload = { ...payload, generationConfig: rest };
-          continue;
-        }
-        last = { res, model };
-        if (res.ok || !RETRYABLE.has(res.status)) return last;
-        lastError = `${model} returned ${res.status}`;
       } catch (e: any) {
-        lastError =
-          e?.name === "AbortError"
-            ? `${model} did not respond within ${timeoutMs / 1000}s`
-            : `${model}: ${e?.message || "network error"}`;
+        // A hang or network failure: retrying the same model would likely wait again.
+        lastError = e?.name === "AbortError" ? `${model} did not respond within ${timeoutMs / 1000}s` : `${model}: ${e?.message || "network error"}`;
+        gaveUp = true;
+        break;
       } finally {
         clearTimeout(timer);
       }
-      break;
+
+      // Some models reject thinkingConfig; retry the same model without it (does not count as a try).
+      if (res.status === 400 && payload?.generationConfig?.thinkingConfig) {
+        const { thinkingConfig, ...rest } = payload.generationConfig;
+        payload = { ...payload, generationConfig: rest };
+        attempt--;
+        continue;
+      }
+
+      last = { res, model };
+      if (res.ok || !RETRYABLE.has(res.status)) {
+        if (attempt > 0 || i > 0) emitStatus({ state: "ok" });
+        return last;
+      }
+      lastError = `${model} returned ${res.status}`;
+      if (attempt === TRIES_PER_MODEL - 1) break;
+
+      if (res.status === 429) {
+        const wait = (await retryDelayMs(res)) ?? 5000 * 2 ** attempt;
+        if (wait > MAX_LIMIT_WAIT_MS) break; // daily limit or long wait: try the next model now
+        emitStatus({ state: "waiting", reason: "limit", seconds: Math.ceil(wait / 1000), model });
+        await sleep(wait + Math.random() * 500);
+      } else {
+        // 503 / 5xx: the model is overloaded right now; a short backoff usually clears it.
+        const wait = 2000 * 2 ** attempt + Math.random() * 800;
+        emitStatus({ state: "waiting", reason: "busy", seconds: Math.ceil(wait / 1000), model });
+        await sleep(wait);
+      }
     }
+
     if (isPrimary) primaryBlockedUntil = Date.now() + PRIMARY_COOLDOWN_MS;
-    console.warn(`[ContractMind] ${lastError}; trying next option.`);
+    if (i < chain.length - 1) console.warn(`[ContractMind] ${lastError}; trying ${chain[i + 1]}.`);
   }
+  emitStatus({ state: "ok" });
   if (last) return last;
   throw new Error(M(`The AI service is not responding right now (${lastError}). Please try again in a minute.`, `এআই সার্ভিস এখন সাড়া দিচ্ছে না (${lastError})। এক মিনিট পরে আবার চেষ্টা করুন।`));
 }
@@ -318,6 +385,8 @@ type AgentSpec = {
   // What this agent searches the contract for. `scale` multiplies VITE_RAG_TOP_K because
   // agents that must cover many clauses need more excerpts than a single question does.
   retrieval: { queries: string[]; scale: number; perQuery: number };
+  /** Light task: sent to the lite model first (saves the main model's quota). */
+  lite?: boolean;
 };
 
 const usageText = (data: any): string =>
@@ -458,6 +527,7 @@ Only report what is visible; never invent rows.`,
     {
       key: "obligations",
       label: "Obligations & payment milestones",
+      lite: true,
       schema: OBLIGATION_SCHEMA,
       retrieval: {
         queries: [
@@ -569,7 +639,7 @@ Compare the contract against the Gold Standard clause library above. Produce 3 t
           maxOutputTokens: 8192,
           thinkingConfig: { thinkingLevel: "low" },
         },
-      });
+      }, { lite: a.lite });
       run.model = model;
       if (!res.ok) throw new Error(await geminiErrorMessage(res, model));
       const data = await res.json();
@@ -911,7 +981,7 @@ const RATIONALE_SCHEMA = obj({
 export async function ensureRationales(
   redlines: RedlineItem[],
   langBlock: string,
-  ask: (body: any) => Promise<{ res: Response; model: string }> = callGemini
+  ask: (body: any) => Promise<{ res: Response; model: string }> = (body) => callGemini(body, { lite: true })
 ): Promise<{ redlines: RedlineItem[]; repaired: number; dropped: number }> {
   const gaps = redlines.filter((r) => !hasRationale(r));
   if (!gaps.length) return { redlines, repaired: 0, dropped: 0 };

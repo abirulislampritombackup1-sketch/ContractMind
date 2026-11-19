@@ -4,7 +4,7 @@
 
 import { chunkPages, Chunk, SourcePage } from "./chunker";
 import { RAG_CONFIG } from "./config";
-import { embedTexts } from "./embedder";
+import { embedQueriesCached, embedTexts } from "./embedder";
 import { buildExcerptBlock } from "./promptBuilder";
 import { convertPdfToMarkdown } from "./pdfToMarkdown";
 import { retrieve, ScoredChunk } from "./retriever";
@@ -120,7 +120,7 @@ export async function retrieveContext(
     const all = index.chunks.map((chunk) => ({ chunk, score: 1 }));
     return { block: buildExcerptBlock(index.chunks, index.chunks.length), chunks: all, totalChunks: index.chunks.length };
   }
-  const queryVecs = await embedTexts(qs, "RETRIEVAL_QUERY");
+  const queryVecs = await embedQueriesCached(qs);
   const chunks = retrieve(index.chunks, index.vectors, queryVecs, { topK, perQuery: opts.perQuery });
   return { block: buildExcerptBlock(chunks.map((c) => c.chunk), index.chunks.length), chunks, totalChunks: index.chunks.length };
 }

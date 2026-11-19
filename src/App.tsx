@@ -63,6 +63,7 @@ import { applyScoring, rescore } from "./utils/scoring";
 import { ContractView } from "./components/ContractView";
 import { AgentPipeline, AgentRunsCard, PIPELINE_ORDER } from "./components/AgentPipeline";
 import { HowItWorks } from "./components/HowItWorks";
+import { GeminiStatusPill } from "./components/GeminiStatusPill";
 import { buildFindings, findingId } from "./utils/findings";
 import LandGuide from "./components/legal/LandGuide";
 import CaseHelper from "./components/legal/CaseHelper";
@@ -582,6 +583,7 @@ export default function App() {
         )}
       </main>
 
+      <GeminiStatusPill />
       <footer>
         <Lock size={12} style={{ verticalAlign: "-2px", marginRight: 6 }} />
         {L("ContractMind · AI-assisted review, not legal advice", "কন্ট্রাক্টমাইন্ড · এআই-সহায়িত পর্যালোচনা, আইনি পরামর্শ নয়")}

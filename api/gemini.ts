@@ -31,8 +31,9 @@ export async function POST(request: Request): Promise<Response> {
     body: await request.text(),
   });
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: { "Content-Type": upstream.headers.get("Content-Type") || "application/json" },
-  });
+  const headers: Record<string, string> = { "Content-Type": upstream.headers.get("Content-Type") || "application/json" };
+  // Rate-limit responses say how long to wait; pass that on so the app can wait instead of failing.
+  const retryAfter = upstream.headers.get("Retry-After");
+  if (retryAfter) headers["Retry-After"] = retryAfter;
+  return new Response(upstream.body, { status: upstream.status, headers });
 }

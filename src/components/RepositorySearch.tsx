@@ -32,6 +32,21 @@ export const RepositorySearch: React.FC<RepositorySearchProps> = ({ onLoadContra
   const [answer, setAnswer] = useState<{ text: string; busy: boolean } | null>(null);
   const [shown, setShown] = useState(PAGE);
   const [opening, setOpening] = useState<string | null>(null);
+  const [asked, setAsked] = useState("");
+  const [answerFailed, setAnswerFailed] = useState(false);
+
+  // The AI summary costs a request, so it is written only when someone asks for it.
+  const explain = () => {
+    if (!result || !asked) return;
+    setAnswerFailed(false);
+    setAnswer({ text: "", busy: true });
+    answerQuestion(asked, result.results, bn ? "bn" : "en")
+      .then((text) => setAnswer({ text, busy: false }))
+      .catch(() => {
+        setAnswer(null);
+        setAnswerFailed(true);
+      });
+  };
 
   useEffect(() => {
     loadCorpus().then(setCorpus).catch((e) => setError(e.message));
@@ -48,12 +63,7 @@ export const RepositorySearch: React.FC<RepositorySearchProps> = ({ onLoadContra
     try {
       const r = await searchRepository(q, { parsed });
       setResult(r);
-      if (q.trim() && !parsed && r.results.length) {
-        setAnswer({ text: "", busy: true });
-        answerQuestion(q, r.results, bn ? "bn" : "en")
-          .then((text) => setAnswer({ text, busy: false }))
-          .catch(() => setAnswer(null)); // no AI available: the filtered results still answer the question
-      }
+      setAsked(q.trim());
     } catch (e: any) {
       setError(e.message || String(e));
     } finally {
@@ -183,6 +193,15 @@ export const RepositorySearch: React.FC<RepositorySearchProps> = ({ onLoadContra
           </div>
         )}
       </div>
+
+      {result && asked && result.results.length > 0 && !answer && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <button className="secondary text-xs" onClick={explain}>
+            <Sparkles size={13} /> {L("Summarise these results with AI", "এআই দিয়ে ফলাফলের সারাংশ")}
+          </button>
+          {answerFailed && <span className="text-xs text-muted">{L("The AI is not available right now; the list below still answers the question.", "এআই এখন পাওয়া যাচ্ছে না; নিচের তালিকাই প্রশ্নের উত্তর দেয়।")}</span>}
+        </div>
+      )}
 
       {answer && (
         <div className="bg-surface p-5 rounded-2xl border border-brand/30 space-y-2">

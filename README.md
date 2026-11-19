@@ -42,7 +42,11 @@ flowchart LR
   L[(650 CUAD + MAUD contracts)] --> Q[NL query → filters + semantic/BM25 ranking] --> A[Cited answer]
 ```
 
-All model calls go through `/api/gemini` (key server-side), with a primary/fallback model, at most 3 requests at once, and token usage logged per call (`__contractmindTokens.totals()` in the console).
+All model calls go through `/api/gemini` (key server-side), and token usage is logged per call (`__contractmindTokens.totals()` in the console). To stay inside rate limits:
+
+- **503 (model overloaded):** retried on the same model with a short backoff (about 2 s, then 4 s) before switching to the backup model.
+- **429 (rate limit):** waits as long as Google asks (`Retry-After` / `RetryInfo`, up to 35 s) and retries; longer waits go straight to the backup model. A notice at the bottom of the screen shows the wait.
+- At most 2 requests run at once; light tasks use the lite model (free-tier limits are per model); query embeddings are cached; the Library only asks the AI to read a question when the built-in parser finds no filter, and writes its summary only on request.
 
 ## Accuracy
 
@@ -205,7 +209,8 @@ All optional, read at build/dev start (client-visible, so they need the `VITE_` 
 | `VITE_RAG_EMBED_BATCH` | `100` | Chunks per embedding request (max 100). |
 | `VITE_RAG_SUMMARY_BATCH_CHARS` | `12000` | Characters per group in chunk-by-chunk summaries. |
 | `VITE_RAG_MIN_PAGE_CHARS` | `40` | Pages with fewer characters are flagged as scanned. |
-| `VITE_GEMINI_MAX_CONCURRENT` | `3` | Most Gemini requests running at once (protects the free-tier rate limit). |
+| `VITE_GEMINI_MAX_CONCURRENT` | `2` | Most Gemini requests running at once (protects the per-minute rate limit). |
+| `VITE_GEMINI_LITE_MODEL` | fallback model | Model for light tasks (obligations, completing redline reasoning, Library questions); the main model is their backup. |
 | `VITE_RAG_GOLD_MIN_SIMILARITY` | `0.6` | Similarity (0-1) at which a contract section counts as covering a Gold Standard clause. |
 | `VITE_SHOW_LEGAL_BD` | `true` | `false` hides the Land Guide and Case Helper tabs. |
 
