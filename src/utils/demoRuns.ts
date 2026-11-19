@@ -1,5 +1,5 @@
-// Saved runs for the three sample contracts. A real analysis of each sample (English and
-// Bangla, default playbook) is recorded once and shipped in public/demo/, so demos don't
+// Saved runs for the three sample contracts. A real analysis of each sample with each
+// built-in playbook (English and Bangla) is recorded once and shipped in public/demo/, so demos don't
 // spend API quota. The analysing screen replays the recorded agent pipeline with its real
 // timings (shortened), and the result is marked as a saved run. "Re-run" always calls the AI.
 
@@ -9,11 +9,14 @@ import { DEFAULT_PLAYBOOKS } from "../data/playbooks";
 
 export type DemoRun = { sampleId: string; lang: "en" | "bn"; playbookId: string; recordedAt: string; result: ContractAnalysisResult };
 
-/** The saved run for a sample, or null (other playbooks, missing file, or offline). */
+/** File name of a saved run: public/demo/<sample>.<playbook>.<lang>.json */
+export const demoFileName = (sampleId: string, playbookId: string, lang: string) => `${sampleId}.${playbookId}.${lang}.json`;
+
+/** The saved run for a sample, or null (custom playbook, missing file, or offline). */
 export async function loadDemoRun(sampleId: string, playbookId: string, lang: "en" | "bn"): Promise<DemoRun | null> {
-  if (playbookId !== DEFAULT_PLAYBOOKS[0].id) return null;
+  if (!DEFAULT_PLAYBOOKS.some((p) => p.id === playbookId)) return null; // custom playbooks always run live
   try {
-    const res = await fetch(`/demo/${encodeURIComponent(sampleId)}.${lang}.json`);
+    const res = await fetch(`/demo/${encodeURIComponent(demoFileName(sampleId, playbookId, lang))}`);
     if (!res.ok || !(res.headers.get("content-type") || "").includes("json")) return null;
     const run: DemoRun = await res.json();
     return run?.result?.contractTitle ? run : null;

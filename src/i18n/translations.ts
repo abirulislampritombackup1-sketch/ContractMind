@@ -8,7 +8,7 @@ export const TRANSLATIONS = {
     enterprisePrivacy: "Enterprise Privacy",
     privacyDesc: "Local extraction & boundary guards",
     prototypeMode: "Prototype mode",
-    modelBadge: "Model: Gemini 3.8 Flash",
+    modelBadge: "Model: Gemini 3.5 Flash",
     activePolicy: "Active Policy",
 
     // Nav
@@ -188,7 +188,7 @@ export const TRANSLATIONS = {
     unacceptableLabel: "Unacceptable:",
 
     // Footer
-    footerText: "ContractMind AI · Autonomous Multi-Agent Legal Intelligence · Powered by Gemini 3.8 Flash · Not Legal Advice",
+    footerText: "ContractMind AI · Autonomous Multi-Agent Legal Intelligence · Powered by Gemini 3.5 Flash · Not Legal Advice",
   },
 
   bn: {

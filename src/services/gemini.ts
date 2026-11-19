@@ -17,7 +17,7 @@ import { logUsage } from "../rag/tokenLog";
 
 // The API key never reaches the browser: requests go to /api/gemini, and the
 // server-side proxy (vite.config.ts) attaches GEMINI_API_KEY before forwarding.
-const MODEL = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || "gemini-3.8-flash";
+const MODEL = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || "gemini-3.5-flash";
 // Used when the primary model is overloaded (503/429), erroring, or too slow.
 const FALLBACK_MODEL =
   (import.meta.env.VITE_GEMINI_FALLBACK_MODEL as string | undefined) || "gemini-3.5-flash-lite";
@@ -164,11 +164,13 @@ async function callGeminiNow(body: any, opts: CallOptions): Promise<{ res: Respo
         if (wait > MAX_LIMIT_WAIT_MS) break; // daily limit or long wait: try the next model now
         emitStatus({ state: "waiting", reason: "limit", seconds: Math.ceil(wait / 1000), model });
         await sleep(wait + Math.random() * 500);
+        emitStatus({ state: "ok" }); // the wait is over; the retry is now in progress
       } else {
         // 503 / 5xx: the model is overloaded right now; a short backoff usually clears it.
         const wait = 2000 * 2 ** attempt + Math.random() * 800;
         emitStatus({ state: "waiting", reason: "busy", seconds: Math.ceil(wait / 1000), model });
         await sleep(wait);
+        emitStatus({ state: "ok" });
       }
     }
 

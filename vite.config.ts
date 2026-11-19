@@ -2,7 +2,7 @@ import { defineConfig, loadEnv, Plugin, ProxyOptions } from "vite";
 import fs from "node:fs";
 import path from "node:path";
 
-// Dev only: saves a live analysis of a sample contract as its demo run (public/demo/<id>.<lang>.json).
+// Dev only: saves a live analysis of a sample contract as its demo run (public/demo/<id>.<playbook>.<lang>.json).
 // In the browser console, after analysing a sample: await window.__cmSaveDemoRun()
 function saveDemoRuns(): Plugin {
   return {
@@ -19,12 +19,13 @@ function saveDemoRuns(): Plugin {
         req.on("end", () => {
           try {
             const run = JSON.parse(body);
-            if (!/^(CUAD|MAUD)-\d{4}$/.test(run.sampleId) || !["en", "bn"].includes(run.lang) || !run.result?.contractTitle) throw new Error("Not a sample run.");
+            if (!/^(CUAD|MAUD)-\d{4}$/.test(run.sampleId) || !["en", "bn"].includes(run.lang) || !/^[a-z-]{3,40}$/.test(run.playbookId) || !run.result?.contractTitle) throw new Error("Not a sample run.");
             const dir = path.resolve("public/demo");
             fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(path.join(dir, `${run.sampleId}.${run.lang}.json`), JSON.stringify(run));
+            const name = `${run.sampleId}.${run.playbookId}.${run.lang}.json`;
+            fs.writeFileSync(path.join(dir, name), JSON.stringify(run));
             res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ saved: `public/demo/${run.sampleId}.${run.lang}.json` }));
+            res.end(JSON.stringify({ saved: `public/demo/${name}` }));
           } catch (e: any) {
             res.statusCode = 400;
             res.end(JSON.stringify({ error: e?.message || String(e) }));

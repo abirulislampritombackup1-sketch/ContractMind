@@ -40,8 +40,13 @@ async function embedBatch(texts: string[], taskType: EmbedTaskType, deps: EmbedD
   });
 
   let lastError = "";
+  let askedWaitMs: number | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0) await sleep(Math.min(30000, 1000 * 2 ** (attempt - 1)) + Math.random() * 300);
+    if (attempt > 0) {
+      // A rate limit says how long to wait ("retry in 35s"); otherwise back off exponentially.
+      await sleep(askedWaitMs ?? Math.min(30000, 1000 * 2 ** (attempt - 1)) + Math.random() * 300);
+      askedWaitMs = null;
+    }
     let res: Response;
     try {
       res = await doFetch(`/api/gemini/models/${model}:batchEmbedContents`, {
@@ -60,20 +65,51 @@ async function embedBatch(texts: string[], taskType: EmbedTaskType, deps: EmbedD
       return embeddings.map((e) => normalize(e.values));
     }
     let detail = "";
+    let errBody: any = null;
     try {
-      detail = (await res.json())?.error?.message || "";
+      errBody = await res.json();
+      detail = errBody?.error?.message || "";
     } catch {}
     lastError = `${res.status} ${detail}`.trim();
     if (!RETRYABLE.has(res.status)) break;
+    if (res.status === 429) {
+      const info = (errBody?.error?.details || []).find((d: any) => String(d?.["@type"] || "").includes("RetryInfo"));
+      const secs = Number(String(info?.retryDelay || "").replace(/s$/, "")) || Number(detail.match(/retry in ([\d.]+)s/i)?.[1]);
+      if (secs > 0) askedWaitMs = Math.min(65000, Math.ceil(secs * 1000) + 500);
+    }
   }
   throw new Error(`Embedding request failed (${lastError}).`);
 }
 
-/** Embed any number of texts, 100 per request (configurable), preserving order. */
+/**
+ * Most characters per request (~15K tokens). The free tier allows 30K embedding tokens per
+ * minute, so a batch of 100 long chunks (~50K tokens) could never succeed in one request.
+ */
+const MAX_BATCH_CHARS = 60000;
+
+/** Splits texts into requests of at most `maxCount` texts and about `maxChars` characters. */
+export function batchesOf(texts: string[], maxCount: number, maxChars = MAX_BATCH_CHARS): string[][] {
+  const out: string[][] = [];
+  let cur: string[] = [];
+  let chars = 0;
+  for (const t of texts) {
+    if (cur.length && (cur.length >= maxCount || chars + t.length > maxChars)) {
+      out.push(cur);
+      cur = [];
+      chars = 0;
+    }
+    cur.push(t);
+    chars += t.length;
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+/** Embed any number of texts, in batches (100 texts / ~15K tokens each), preserving order. */
 export async function embedTexts(texts: string[], taskType: EmbedTaskType, deps: EmbedDeps = {}): Promise<Float32Array[]> {
   const out: Float32Array[] = [];
-  for (let i = 0; i < texts.length; i += RAG_CONFIG.embedBatchSize) {
-    out.push(...(await embedBatch(texts.slice(i, i + RAG_CONFIG.embedBatchSize), taskType, deps)));
+  for (const batch of batchesOf(texts, RAG_CONFIG.embedBatchSize)) {
+    out.push(...(await embedBatch(batch, taskType, deps)));
   }
   return out;
 }

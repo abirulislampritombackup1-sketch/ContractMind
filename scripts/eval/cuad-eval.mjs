@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Accuracy test against CUAD v1's expert labels.
 //
-//   GEMINI_API_KEY=... node scripts/eval/cuad-eval.mjs [--n 40] [--seed 7] [--model gemini-3.8-flash]
+//   GEMINI_API_KEY=... node scripts/eval/cuad-eval.mjs [--n 40] [--seed 7] [--model gemini-3.5-flash]
 //   node scripts/eval/cuad-eval.mjs --baseline [--n 40]      (keyword baseline, no API key needed)
 //
 // For each sampled CUAD contract the model says, for 12 clause types, whether the contract
@@ -19,7 +19,7 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) =>
 const N = Number(args.n || 40);
 const SEED = Number(args.seed || 7);
 const BASELINE = !!args.baseline;
-const MODEL = args.model || process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const MODEL = args.model || process.env.GEMINI_MODEL || "gemini-3.5-flash";
 const KEY = process.env.GEMINI_API_KEY;
 const MAX_CHARS = 120000;
 

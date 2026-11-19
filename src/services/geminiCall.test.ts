@@ -39,24 +39,24 @@ describe("Gemini retries", () => {
     const { res, model } = await callGemini({ contents: [] });
     off();
     expect(res.status).toBe(200);
-    expect(model).toBe("gemini-3.8-flash");
-    expect(calls).toEqual(["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash"]);
+    expect(model).toBe("gemini-3.5-flash");
+    expect(calls).toEqual(["gemini-3.5-flash", "gemini-3.5-flash", "gemini-3.5-flash"]);
     expect(waits).toHaveLength(2);
     expect(waits[1]).toBeGreaterThan(waits[0]); // exponential backoff
-    expect(seen.map((s) => s.state)).toEqual(["waiting", "waiting", "ok"]);
+    expect(seen.map((s) => s.state)).toEqual(["waiting", "ok", "waiting", "ok", "ok"]); // notice hides during each retry
   });
 
   it("moves to the backup model after three overloaded answers", async () => {
     stubFetch([busy, busy, busy, ok]);
     const { model } = await callGemini({ contents: [] });
     expect(model).toBe("gemini-3.5-flash-lite");
-    expect(calls).toEqual(["gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"]);
+    expect(calls).toEqual(["gemini-3.5-flash", "gemini-3.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]);
   });
 
   it("waits as long as Google asks on a 429, then retries the same model", async () => {
     stubFetch([() => limited("3s"), ok]);
     const { model } = await callGemini({ contents: [] });
-    expect(model).toBe("gemini-3.8-flash");
+    expect(model).toBe("gemini-3.5-flash");
     expect(waits[0]).toBeGreaterThanOrEqual(3000);
     expect(waits[0]).toBeLessThan(3600);
   });
@@ -103,5 +103,30 @@ describe("query embedding cache", () => {
     expect([...b[1]]).toEqual([...a[0]]);
     await embedQueriesCached(["liability cap", "audit rights"], { fetchImpl });
     expect(requests).toBe(2); // only the new query was embedded
+  });
+});
+
+describe("embedding batches and rate limits", () => {
+  it("keeps each embedding request under the per-minute token limit", async () => {
+    const { batchesOf } = await import("../rag/embedder");
+    const long = Array.from({ length: 100 }, () => "x".repeat(2000)); // ~50K tokens in one batch
+    const b = batchesOf(long, 100);
+    expect(b.length).toBeGreaterThan(1);
+    expect(b.every((x) => x.reduce((s, t) => s + t.length, 0) <= 60000)).toBe(true);
+    expect(b.flat()).toHaveLength(100);
+  });
+
+  it("waits as long as the 429 says before retrying an embedding", async () => {
+    const { embedTexts } = await import("../rag/embedder");
+    const slept: number[] = [];
+    let n = 0;
+    const fetchImpl = (async () => {
+      n++;
+      if (n === 1) return new Response(JSON.stringify({ error: { message: "Quota exceeded. Please retry in 35.7s." } }), { status: 429 });
+      return new Response(JSON.stringify({ embeddings: [{ values: [1, 0] }] }), { status: 200 });
+    }) as any;
+    const v = await embedTexts(["a"], "RETRIEVAL_DOCUMENT", { fetchImpl, sleep: async (ms) => void slept.push(ms) });
+    expect(v).toHaveLength(1);
+    expect(slept[0]).toBeGreaterThanOrEqual(35700);
   });
 });

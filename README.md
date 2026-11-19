@@ -59,9 +59,9 @@ All model calls go through `/api/gemini` (key server-side), and token usage is l
 
 ## Saved demo runs
 
-The three sample contracts come with a saved real analysis (English and Bangla, default playbook) in `public/demo/`. Analysing a sample replays the recorded agent pipeline with its real timings, shortened to about 6-14 seconds, and shows the result with a **Saved run** label, without calling the API. **Re-run**, another playbook or your own file always calls the AI.
+The three sample contracts come with a saved real analysis for each built-in playbook, in English and Bangla, in `public/demo/` (`<sample>.<playbook>.<lang>.json`). Analysing a sample replays the recorded agent pipeline with its real timings, shortened to about 6-14 seconds, and shows the result with a **Saved run** label, without calling the API. **Re-run**, a custom playbook or your own file always calls the AI.
 
-To re-record (for example after switching models): set `GEMINI_API_KEY` in `.env`, run `pnpm dev`, analyse a sample, then run `await window.__cmSaveDemoRun()` in the browser console. That writes `public/demo/<sample>.<lang>.json` (dev server only).
+To re-record (for example after switching models): set `GEMINI_API_KEY` in `.env`, run `pnpm dev`, analyse a sample, then run `await window.__cmSaveDemoRun()` in the browser console. That writes `public/demo/<sample>.<playbook>.<lang>.json` (dev server only).
 
 ## Demo and pitch
 
@@ -193,7 +193,7 @@ All optional, read at build/dev start (client-visible, so they need the `VITE_` 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | – | Server-side key used by the proxy (required). |
-| `VITE_GEMINI_MODEL` | `gemini-3.8-flash` | Primary generation model. |
+| `VITE_GEMINI_MODEL` | `gemini-3.5-flash` | Primary generation model. |
 | `VITE_GEMINI_FALLBACK_MODEL` | `gemini-3.5-flash-lite` | Fallback generation model. |
 | `VITE_GEMINI_EMBEDDING_MODEL` | `gemini-embedding-001` | Embedding model. |
 | `VITE_RAG_ENABLED` | `true` | `false` sends whole documents (old behaviour). |
