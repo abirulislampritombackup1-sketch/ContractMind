@@ -44,6 +44,7 @@ import { indexDocument } from "./rag";
 import { analysisKey, getCachedAnalysis, saveAnalysis } from "./utils/analysisCache";
 import { isCustom, loadCustomPlaybooks, playbookProblems, saveCustomPlaybooks } from "./utils/playbookStore";
 import { openRiskReport } from "./utils/riskReport";
+import { loadDemoRun, replayPipeline } from "./utils/demoRuns";
 import { pageAt } from "./utils/obligationsExport";
 import { Language } from "./i18n/translations";
 import { LangProvider, toBnDigits } from "./i18n/lang";
@@ -65,6 +66,16 @@ import { GeminiStatusPill } from "./components/GeminiStatusPill";
 import { buildFindings, findingId } from "./utils/findings";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+// Dev only: save the last live analysis of a sample as its demo run (see vite.config.ts).
+if (import.meta.env.DEV) {
+  (window as any).__cmSaveDemoRun = async () => {
+    const run = (window as any).__cmLastRun;
+    if (!run) throw new Error("Analyse a sample contract first (live, not a saved run).");
+    const res = await fetch("/__demo/save", { method: "POST", body: JSON.stringify({ ...run, recordedAt: new Date().toISOString() }) });
+    return res.json();
+  };
+}
 
 
 type View = "review" | "playbooks" | "library" | "about";
@@ -220,15 +231,23 @@ export default function App() {
     setRuns({});
     window.scrollTo({ top: 0, behavior: "smooth" });
     try {
-      const key = await analysisKey({ file, text: contractText, playbook: currentPlaybook, lang }).catch(() => "");
-      const cached = !force && key ? await getCachedAnalysis(key) : null;
-      const result =
-        cached ??
-        (await runContractIntelligence(contractText, currentPlaybook, file || undefined, lang, (agent, state, run) => {
-          setProgress((p) => ({ ...p, [agent]: state }));
-          if (run) setRuns((r) => ({ ...r, [agent]: run }));
-        }));
-      if (!cached && key) saveAnalysis(key, result);
+      const onProgress = (agent: AgentKey, state: AgentState, run?: AgentRun) => {
+        setProgress((p) => ({ ...p, [agent]: state }));
+        if (run) setRuns((r) => ({ ...r, [agent]: run }));
+      };
+      // Sample contracts with the default playbook replay a saved real run (no API calls).
+      const demo = !force && sampleId && !file ? await loadDemoRun(sampleId, currentPlaybook.id, lang) : null;
+      if (demo) await replayPipeline(demo.result.agentRuns, onProgress);
+      const key = demo ? "" : await analysisKey({ file, text: contractText, playbook: currentPlaybook, lang }).catch(() => "");
+      const cached = !demo && !force && key ? await getCachedAnalysis(key) : null;
+      const result = demo
+        ? { ...demo.result, demoReplay: { recordedAt: demo.recordedAt } }
+        : cached ?? (await runContractIntelligence(contractText, currentPlaybook, file || undefined, lang, onProgress));
+      if (!demo && !cached && key) saveAnalysis(key, result);
+      if (import.meta.env.DEV && sampleId && !file && !demo) {
+        // Dev only: lets a maintainer save this live run as the sample's demo (window.__cmSaveDemoRun()).
+        (window as any).__cmLastRun = { sampleId, lang, playbookId: currentPlaybook.id, result };
+      }
       setAnalysisResult(result);
       setAnalyzed({ text: contractText, file, name: docName });
       setShowResults(true);
@@ -686,7 +705,15 @@ function ResultsWorkspace(props: {
       <section className="resultHead">
         <RiskGauge score={result.overallRiskScore} label={L("RISK", "ঝুঁকি")} lang={lang} />
         <div className="grow">
-          <div className="eyebrowW">{riskWord[result.riskLevel] || result.riskLevel}{result.isDemo ? ` · ${L("Demo data", "ডেমো ডেটা")}` : ""}</div>
+          <div className="eyebrowW">
+            {riskWord[result.riskLevel] || result.riskLevel}
+            {result.isDemo ? ` · ${L("Demo data", "ডেমো ডেটা")}` : ""}
+            {result.demoReplay && (
+              <span className="savedRun" title={L("A real analysis of this sample, saved so the demo needs no API calls. Re-run asks the AI again.", "এই স্যাম্পলের একটি আসল বিশ্লেষণ, সংরক্ষিত যাতে ডেমোতে API কল না লাগে। আবার চালান চাপলে এআই নতুন করে বিশ্লেষণ করে।")}>
+                {L("Saved run", "সংরক্ষিত বিশ্লেষণ")} · {result.demoReplay.recordedAt.slice(0, 10)}
+              </span>
+            )}
+          </div>
           <h1>{result.contractTitle}</h1>
           <div className="meta">
             {result.parties.slice(0, 3).map((p, i) => (

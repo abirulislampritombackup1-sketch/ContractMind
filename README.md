@@ -57,6 +57,12 @@ All model calls go through `/api/gemini` (key server-side), and token usage is l
 | Keyword baseline (no AI) | 70.7% | 66.7% | 100% |
 | Gemini | run `GEMINI_API_KEY=... node scripts/eval/cuad-eval.mjs` | | |
 
+## Saved demo runs
+
+The three sample contracts come with a saved real analysis (English and Bangla, default playbook) in `public/demo/`. Analysing a sample replays the recorded agent pipeline with its real timings, shortened to about 6-14 seconds, and shows the result with a **Saved run** label, without calling the API. **Re-run**, another playbook or your own file always calls the AI.
+
+To re-record (for example after switching models): set `GEMINI_API_KEY` in `.env`, run `pnpm dev`, analyse a sample, then run `await window.__cmSaveDemoRun()` in the browser console. That writes `public/demo/<sample>.<lang>.json` (dev server only).
+
 ## Demo and pitch
 
 - [docs/DEMO.md](docs/DEMO.md): a 3-minute demo script.

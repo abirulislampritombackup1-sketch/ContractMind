@@ -765,3 +765,5 @@ button.danger { color: var(--danger); }
   padding: 9px 16px; border-radius: 999px; background: var(--card); border: 1px solid rgb(var(--warn-rgb) / 0.45); color: var(--text); font-size: 13px; font-weight: 600;
   box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.35); animation: rise 0.25s ease both; }
 .aiWait svg { color: var(--warn); flex-shrink: 0; }
+
+.savedRun { display: inline-flex; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: rgb(255 255 255 / 0.18); font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; vertical-align: 1px; }
